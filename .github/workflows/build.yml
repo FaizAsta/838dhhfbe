@@ -1,0 +1,383 @@
+name: Build Piko mpp from zip
+
+on:
+  push:
+    paths:
+      # Any Piko archive in the repository root: "piko v1.4.1.zip", "piko_v1_4_1.zip", "piko-v1.4.1.zip".
+      - 'piko*.zip'
+      - 'Piko*.zip'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+    inputs:
+      zip_name:
+        description: 'Zip to build (exact file name, in the repository root or in dev/). Leave empty to use the highest version.'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write   # publish the release, extract files, move the zip
+      packages: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip outside the repository
+        id: unzip
+        env:
+          REQUESTED_ZIP: ${{ github.event.inputs.zip_name }}
+        run: |
+          # Which zip to build:
+          #   1. the file typed into "Run workflow" (zip_name), if any (root first, then dev/);
+          #   2. otherwise the highest version among the piko*.zip files in the root:
+          #      "piko v1.10.0.zip" beats "piko v1.4.0.zip". The version is the number after the "v";
+          #      "." "_" and "-" all work as separators;
+          #   3. if the root has no piko zip (it was already moved), the highest version in dev/;
+          #   4. otherwise any other piko*.zip (last one by name).
+          pick_latest() {   # $1 = directory ("." or "dev")
+            [ -d "$1" ] || return 0
+            find "$1" -maxdepth 1 -type f -iname 'piko*.zip' -printf '%f\n' | while IFS= read -r name; do
+              ver="$(printf '%s' "$name" | grep -oiE 'v[0-9]+([._-][0-9]+)*' | head -n 1 | tr -d 'vV' | tr '_-' '..' || true)"
+              if [ -n "$ver" ]; then
+                printf '%s\t%s\n' "$ver" "$name"
+              fi
+            done | sort -V -t "$(printf '\t')" -k1,1 | tail -n 1 | cut -f2-
+          }
+          pick_any() {      # $1 = directory ("." or "dev")
+            [ -d "$1" ] || return 0
+            find "$1" -maxdepth 1 -type f -iname 'piko*.zip' -printf '%f\n' | sort | tail -n 1
+          }
+
+          zip_file=""
+          if [ -n "$REQUESTED_ZIP" ]; then
+            if [ -f "$REQUESTED_ZIP" ]; then
+              zip_file="$REQUESTED_ZIP"
+            elif [ -f "dev/$REQUESTED_ZIP" ]; then
+              zip_file="dev/$REQUESTED_ZIP"
+            else
+              echo "zip_name '$REQUESTED_ZIP' was not found in the repository root or in dev/. Zips found:"
+              find . -maxdepth 2 -type f -iname '*.zip' -printf '  %p\n'
+              exit 1
+            fi
+          else
+            for dir in . dev; do
+              name="$(pick_latest "$dir")"
+              if [ -z "$name" ]; then
+                name="$(pick_any "$dir")"
+              fi
+              if [ -n "$name" ]; then
+                if [ "$dir" = "." ]; then zip_file="$name"; else zip_file="$dir/$name"; fi
+                break
+              fi
+            done
+          fi
+          if [ -z "$zip_file" ]; then
+            echo "No piko*.zip found in the repository root or in dev/"
+            exit 1
+          fi
+          echo "Using: $zip_file"
+          echo "ZIP_FILE=$zip_file" >> "$GITHUB_ENV"
+          echo "ZIP_NAME=$(basename "$zip_file")" >> "$GITHUB_ENV"
+          echo "### Building \`$zip_file\`" >> "$GITHUB_STEP_SUMMARY"
+
+          rm -rf "$RUNNER_TEMP/addon"
+          mkdir -p "$RUNNER_TEMP/addon"
+          unzip -q "$zip_file" -d "$RUNNER_TEMP/addon"
+          gradlew_path="$(find "$RUNNER_TEMP/addon" -maxdepth 3 -name gradlew -type f -print -quit)"
+          if [ -z "$gradlew_path" ]; then
+            echo "gradlew not found inside the zip"
+            exit 1
+          fi
+          addon_dir="$(dirname "$gradlew_path")"
+          echo "ADDON_DIR=$addon_dir" >> "$GITHUB_ENV"
+          # Where the project sits inside the zip ("." when it is at the top, otherwise the top folder's name).
+          echo "ADDON_REL=$(realpath --relative-to="$RUNNER_TEMP/addon" "$addon_dir")" >> "$GITHUB_ENV"
+
+          # The version the project itself reports (gradle.properties), used to name the artifact.
+          version="$(sed -n 's/^version *= *//p' "$addon_dir/gradle.properties" | head -n 1 | tr -d '[:space:]\r')"
+          echo "PROJECT_VERSION=${version:-unknown}" >> "$GITHUB_ENV"
+          echo "Project version: ${version:-unknown}"
+
+      # Runs first, before anything is built. It
+      #   1. extracts every file of the zip into the repository root (main repo page),
+      #   2. moves the zip (and any other piko*.zip in the root) into dev/, and
+      #   3. commits and pushes that.
+      # So the repository shows the new source even when the build below fails, and the build can be started again
+      # from dev/ with "Run workflow" (leave zip_name empty: the highest version in dev/ is used).
+      # The .github folder inside the zip is skipped on purpose: GitHub does not let a workflow
+      # change other workflows, and the zip's own workflows must not replace this one.
+      # patches-bundle.json is skipped too: it needs the download link of the .mpp, so the last step writes it.
+      - name: Extract the zip into the repository and move it to dev/
+        id: extract
+        run: |
+          set -euo pipefail
+
+          # --- 1. Extract. A fresh copy of the zip is used, because the folder the build works in gets build
+          #        output and a .git folder of its own.
+          rm -rf "$RUNNER_TEMP/extract"
+          mkdir -p "$RUNNER_TEMP/extract"
+          unzip -q "$ZIP_FILE" -d "$RUNNER_TEMP/extract"
+          src="$RUNNER_TEMP/extract/$ADDON_REL"
+          echo "Extracting $src into the repository root"
+          tar -C "$src" \
+              --exclude='.git' --exclude='.github' --exclude='__MACOSX' --exclude='.DS_Store' \
+              --exclude='./patches-bundle.json' \
+              -cf - . | tar -xf -
+
+          # --- 2. Move zips to dev/ (nothing is deleted).
+          mkdir -p dev
+          while IFS= read -r name; do
+            echo "Moving to dev/: $name"
+            mv -f -- "$name" "dev/$name"
+          done < <(find . -maxdepth 1 -type f -iname 'piko*.zip' -printf '%f\n')
+
+          # --- 3. Commit and push.
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git add -f -- dev   # -f in case the zip's .gitignore matches it
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+          else
+            git commit -q -m "Extract $ZIP_NAME and move the zip to dev [skip ci]"
+            git pull --rebase -q origin "$GITHUB_REF_NAME"
+            git push -q origin "HEAD:$GITHUB_REF_NAME"
+          fi
+
+          # The release below is tagged on this commit (the one that holds the extracted source).
+          echo "RELEASE_TARGET=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          {
+            echo
+            echo "Extracted \`$ZIP_NAME\` into the repository, zip moved to \`dev/\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Give the unzipped project a Git repository because the build
+      # hashes its inputs with git ls-files.
+      - name: Make the unzipped project a git repository
+        id: git
+        working-directory: ${{ env.ADDON_DIR }}
+        run: |
+          git init -q -b main
+          git add -A
+          git -c user.name="github-actions" \
+              -c user.email="github-actions@users.noreply.github.com" \
+              commit -q -m "Snapshot of the unzipped project"
+          echo "Tracked files: $(git ls-files | wc -l)"
+          if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+            echo "Untracked files remain:"
+            git ls-files --others --exclude-standard
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Working tree is not clean:"
+            git status --porcelain | head -20
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        id: java
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Accept Android SDK licenses.
+      - name: Accept Android SDK licenses
+        id: sdk
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-<unset>}"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      # Prints whether MORPHE_PAT exists and what the Morphe registry answers. The token is never printed.
+      - name: Check registry access
+        env:
+          TOKEN: ${{ secrets.MORPHE_PAT || secrets.GITHUB_TOKEN }}
+          HAS_PAT: ${{ secrets.MORPHE_PAT != '' }}
+        run: |
+          echo "MORPHE_PAT set: $HAS_PAT"
+          curl -s -o /dev/null -w "registry HTTP status: %{http_code}\n" \
+            -u "${{ github.actor }}:$TOKEN" \
+            https://maven.pkg.github.com/MorpheApp/registry/app/morphe/patches/app.morphe.patches.gradle.plugin/1.3.4/app.morphe.patches.gradle.plugin-1.3.4.pom
+
+      - name: Build the patch bundle
+        id: gradle
+        working-directory: ${{ env.ADDON_DIR }}
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.MORPHE_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          chmod +x gradlew
+          ./gradlew :patches:generatePatchesList :patches:buildAndroid --no-daemon --console=plain --dependency-verification=lenient 2>&1 | tee "$RUNNER_TEMP/gradle.log"
+
+      - name: Collect the .mpp
+        id: collect
+        run: |
+          mkdir -p dist
+          echo "Every .mpp under patches/build:"
+          find "$ADDON_DIR/patches/build" -name '*.mpp' -type f -print || true
+          found=0
+          while IFS= read -r f; do
+            case "$f" in *sources*|*javadoc*) continue ;; esac
+            if unzip -Z1 "$f" | grep -x 'classes.dex' > /dev/null; then
+              cp "$f" dist/
+              found=1
+            fi
+          done < <(find "$ADDON_DIR/patches/build" -name '*.mpp' -type f)
+          if [ "$found" -eq 0 ]; then
+            echo "No .mpp with classes.dex found, copying every .mpp instead"
+            find "$ADDON_DIR/patches/build" -name '*.mpp' -type f ! -name '*sources*' ! -name '*javadoc*' -exec cp {} dist/ \;
+          fi
+          ls -l dist
+          {
+            echo
+            echo "Built version \`$PROJECT_VERSION\`:"
+            ls -1 dist | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Publishes the .mpp as a GitHub Release. Release files download directly, with no zip.
+      # Only the newest "piko-*" release is kept; older ones (and their tags) are deleted.
+      - name: Publish the .mpp as a release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "$PROJECT_VERSION" = "unknown" ]; then
+            tag="piko-build-${GITHUB_RUN_NUMBER}"
+            title="Piko build ${GITHUB_RUN_NUMBER}"
+          else
+            tag="piko-v${PROJECT_VERSION}"
+            title="Piko v${PROJECT_VERSION}"
+          fi
+
+          gh release list --limit 200 --json tagName --jq '.[].tagName | select(startswith("piko-"))' |
+          while IFS= read -r old; do
+            echo "Deleting old release: $old"
+            gh release delete "$old" --cleanup-tag --yes
+          done
+
+          gh release create "$tag" dist/*.mpp \
+            --target "$RELEASE_TARGET" \
+            --title "$title" \
+            --notes "Built from \`$ZIP_NAME\`" \
+            --latest
+
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+
+          url="$(gh release view "$tag" --json url --jq .url)"
+          echo "Release: $url"
+          {
+            echo
+            echo "Download the .mpp: $url"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Last: writes patches-bundle.json, the file Morphe Manager reads from "Add patch source". It points at the .mpp
+      # of the release above, so it can only be written once the release exists. Also takes the patch list this
+      # build generated, and pushes both.
+      - name: Write patches-bundle.json and push it
+        id: bundle
+        run: |
+          set -euo pipefail
+
+          # Fresh patch list generated by this build (if the build produced one).
+          if [ -f "$ADDON_DIR/patches-list.json" ]; then
+            cp "$ADDON_DIR/patches-list.json" patches-list.json
+          fi
+
+          # --- patches-bundle.json: points Morphe Manager at the .mpp of the release above.
+          mpp_files=(dist/*.mpp)
+          mpp_file="${mpp_files[0]}"
+          if [ ! -f "$mpp_file" ]; then
+            echo "No .mpp found in dist/"
+            exit 1
+          fi
+          mpp_name="$(basename "$mpp_file")"
+          mpp_encoded="$(jq -rn --arg n "$mpp_name" '$n|@uri')"
+          download_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${mpp_encoded}"
+
+          manifest="$(unzip -p "$mpp_file" META-INF/MANIFEST.MF 2>/dev/null | tr -d '\r' || true)"
+          mf_name="$(printf '%s\n' "$manifest" | sed -n 's/^Name: *//p' | head -n 1)"
+          mf_desc="$(printf '%s\n' "$manifest" | sed -n 's/^Description: *//p' | head -n 1)"
+          mf_version="$(printf '%s\n' "$manifest" | sed -n 's/^Version: *//p' | head -n 1)"
+
+          bundle_version="$PROJECT_VERSION"
+          if [ "$bundle_version" = "unknown" ]; then
+            bundle_version="${mf_version:-unknown}"
+          fi
+          description="${mf_name:-Piko} ${bundle_version}${mf_desc:+ - $mf_desc}"
+
+          jq -n \
+            --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%S)" \
+            --arg description "$description" \
+            --arg download_url "$download_url" \
+            --arg version "$bundle_version" \
+            '{created_at: $created_at, description: $description, download_url: $download_url, signature_download_url: "", version: $version}' \
+            > patches-bundle.json
+          cat patches-bundle.json
+
+          # dist/ was only a staging folder for the release; it must not be committed.
+          rm -rf dist
+
+          # --- Commit and push.
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git add -f -- patches-bundle.json   # -f in case the zip's .gitignore matches it
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+          else
+            git commit -q -m "Update patches-bundle.json for $bundle_version [skip ci]"
+            git pull --rebase -q origin "$GITHUB_REF_NAME"
+            git push -q origin "HEAD:$GITHUB_REF_NAME"
+          fi
+
+          raw_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}/patches-bundle.json"
+          {
+            echo
+            echo "### Add to Morphe Manager"
+            echo "Add patch source -> Source URL:"
+            echo
+            echo '```'
+            echo "$raw_url"
+            echo '```'
+            echo "or the repository link: https://github.com/${GITHUB_REPOSITORY}"
+            echo
+            echo "The repository must be public, or Morphe Manager cannot download the files."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Report the failed step and recent Gradle output.
+      - name: Report what failed
+        if: failure()
+        run: |
+          steps="unzip=${{ steps.unzip.outcome }} | extract=${{ steps.extract.outcome }} | git=${{ steps.git.outcome }} | java=${{ steps.java.outcome }} | sdk=${{ steps.sdk.outcome }} | gradle=${{ steps.gradle.outcome }} | collect=${{ steps.collect.outcome }} | release=${{ steps.release.outcome }} | bundle=${{ steps.bundle.outcome }}"
+          tail_text=""
+          if [ -f "$RUNNER_TEMP/gradle.log" ]; then
+            tail_text="$(tail -n 25 "$RUNNER_TEMP/gradle.log" | awk 'BEGIN{ORS="%0A"}{gsub(/%/,"%25"); gsub(/\r/,""); print}')"
+          fi
+          echo "::error title=Build failed::Step results: ${steps}%0A%0A${tail_text}"
+          {
+            echo "### Build failed"
+            echo
+            echo "Step results: \`${steps}\`"
+            if [ -f "$RUNNER_TEMP/gradle.log" ]; then
+              echo
+              echo '```'
+              tail -n 40 "$RUNNER_TEMP/gradle.log"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Gradle reports if the build failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-reports
+          path: |
+            ${{ runner.temp }}/gradle.log
+            ${{ env.ADDON_DIR }}/build/reports
+            ${{ env.ADDON_DIR }}/patches/build/reports
+          if-no-files-found: ignore
