@@ -143,6 +143,10 @@ public class Settings {
     // and it only does anything while "Custom selected tab pill" is on. Applies as soon as you go back to the app.
     // See TabPillDrag.
     public static final BooleanSetting CUSTOM_TAB_PILL_DRAG = new BooleanSetting("custom_tab_pill_drag", true, NOT_REQUIRED);
+    // Ambient glow on Reels, like ambient mode on YouTube: when a Reel does not fill the screen, the bars above and
+    // below it are filled with a soft glow in the colours of the video. Off by default. Applies as soon as you go
+    // back to the app. See ReelsAmbient.
+    public static final BooleanSetting REELS_AMBIENT = new BooleanSetting("reels_ambient", false, NOT_REQUIRED);
     // Takes away the rounded pill behind the selected tab of the bottom bar by turning Instagram's
     // enable_active_pills_on_tab_bar flag off. On by default; the flag is read when the bar is created, so it needs a
     // restart. See HookFlags.

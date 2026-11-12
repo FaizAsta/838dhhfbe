@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.9.1",
+  "version": "1.10.0",
   "patches": [
     {
       "name": "Add settings",
@@ -328,35 +328,6 @@
       "name": "Customize navigation bar",
       "description": "Choose which tabs appear in the bottom navigation bar and reorder them",
       "default": true,
-      "category": null,
-      "compatiblePackages": [
-        {
-          "packageName": "com.instagram.android",
-          "name": "Instagram",
-          "description": null,
-          "apkFileType": "APKM",
-          "appIconColor": "#FC483C",
-          "signatures": null,
-          "formFactor": "MOBILE",
-          "targets": [
-            {
-              "version": "452.1.0.53.64",
-              "versionCodes": {
-                "ARM64_V8A": 385811006
-              },
-              "isExperimental": false,
-              "minSdk": null,
-              "description": null
-            }
-          ]
-        }
-      ],
-      "options": []
-    },
-    {
-      "name": "Disable Meta AI components",
-      "description": "Disables Meta AI components in the manifest and turns Meta AI off everywhere in the app.",
-      "default": false,
       "category": null,
       "compatiblePackages": [
         {
