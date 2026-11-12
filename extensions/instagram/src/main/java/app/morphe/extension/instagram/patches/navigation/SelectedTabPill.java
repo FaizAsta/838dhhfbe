@@ -591,6 +591,15 @@ public final class SelectedTabPill {
                     && y >= shown.top - slop && y <= shown.bottom + slop;
         }
 
+        /** Where the highlight was drawn last, in words, for the debug copy. */
+        String describeShown() {
+            if (!on) return "the highlight is off";
+            if (tabIndex < 0) return "no selected tab found";
+            if (!shownValid) return "the highlight was not drawn";
+            return "the highlight at " + Math.round(shown.left) + "," + Math.round(shown.top) + " to "
+                    + Math.round(shown.right) + "," + Math.round(shown.bottom) + (dragging ? " (being dragged)" : "");
+        }
+
         /** Picks the highlight up with a finger at {@code fingerX} (the bar's coordinates). */
         boolean beginDrag(ViewGroup bar, float fingerX) {
             if (!on || tabIndex < 0 || dragging || !drawn) return false;

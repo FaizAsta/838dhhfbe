@@ -59,14 +59,21 @@ final class TabPillDrag {
     private TabPillDrag() {}
 
     /**
-     * Called in every frame with the bar and the highlight that are on screen, or with null for the highlight when
-     * there is none (the setting is off, or no highlight is drawn). That is what switches the touch handling on and
-     * off.
+     * Called in every frame with the window, the bar and the highlight that are on screen, or with null for the
+     * highlight when there is none (the setting is off, or no highlight is drawn). That is what switches the touch
+     * handling on and off.
+     * <p>
+     * The window is handed in by the caller (it is the activity's own). It cannot be found from the window's root view:
+     * that view's context is a {@code DecorContext} whose base is the application, which never leads back to the
+     * activity. The bar's own context is only the fallback.
      */
-    static void sync(View decor, View bar, SelectedTabPill.Highlight highlight) {
+    static void sync(Window window, View bar, SelectedTabPill.Highlight highlight) {
         if (highlight == null && CONTROLLERS.isEmpty()) return;
-        Window window = windowOf(decor);
-        if (window == null) return;
+        if (window == null && bar != null) window = windowOf(bar);
+        if (window == null) {
+            if (highlight != null) note("no window to wrap the touches of");
+            return;
+        }
         Controller controller = CONTROLLERS.get(window);
         if (highlight == null || !(bar instanceof ViewGroup)) {
             if (controller != null) controller.deactivate(window);
@@ -79,8 +86,41 @@ final class TabPillDrag {
         controller.activate(window, (ViewGroup) bar, highlight);
     }
 
-    private static Window windowOf(View decor) {
-        Context context = decor.getContext();
+    // -------------------------------------------------------------------------------------------------------------
+    // What happened, for the debug copy ("Copy navigation bar info")
+    // -------------------------------------------------------------------------------------------------------------
+
+    private static volatile String lastEvent = "nothing yet";
+    private static volatile String lastDown = "no touch seen yet";
+    private static volatile int wraps;
+    private static volatile int touches;
+    private static volatile int downsOnHighlight;
+    private static volatile int holds;
+    private static volatile int drops;
+    private static volatile int opened;
+
+    private static void note(String event) {
+        lastEvent = event;
+    }
+
+    /**
+     * What this class has done so far, for the debug copy: whether the window's touches are being looked at, how many
+     * touches came through, how many started on the highlight, how many holds picked it up, and the last thing that
+     * happened. It says where the press-and-hold stops when it does not work.
+     */
+    static String status() {
+        return "touches looked at: " + touches
+                + "\nwindow callbacks wrapped: " + wraps
+                + "\ntouches that started on the highlight: " + downsOnHighlight
+                + "\nholds that picked it up: " + holds
+                + "\ndrops: " + drops + " (a tab other than the selected one: " + opened + ")"
+                + "\nlast touch down: " + lastDown
+                + "\nlast event: " + lastEvent;
+    }
+
+    /** The activity's window, from the context a view was made with; null when that never leads to an activity. */
+    private static Window windowOf(View view) {
+        Context context = view.getContext();
         for (int depth = 0; depth < 8 && context != null; depth++) {
             if (context instanceof Activity) return ((Activity) context).getWindow();
             if (!(context instanceof ContextWrapper)) return null;
@@ -94,6 +134,7 @@ final class TabPillDrag {
         /** A touch started on the highlight: waiting to see whether it is held. */
         private static final int PENDING = 1;
         private static final int DRAGGING = 2;
+        private static final int MAX_REWRAPS = 3;
 
         private final Handler handler = new Handler(Looper.getMainLooper());
         private final int[] location = new int[2];
@@ -105,6 +146,11 @@ final class TabPillDrag {
         /** The wrapper that is in the window now (null while none), and the callback it passes everything on to. */
         private Window.Callback wrapper;
         private Window.Callback original;
+
+        /** How often the callback was wrapped again after something else had set one (at most MAX_REWRAPS). */
+        private int rewraps;
+        /** A touch is being passed on (or the cancel is being sent) from here: wrappers deeper in the chain skip it. */
+        private boolean busy;
 
         private int state = IDLE;
         private float downX;
@@ -122,7 +168,15 @@ final class TabPillDrag {
         void activate(Window window, ViewGroup barView, SelectedTabPill.Highlight highlightView) {
             if (bar.get() != barView) bar = new WeakReference<>(barView);
             if (highlight.get() != highlightView) highlight = new WeakReference<>(highlightView);
-            if (wrapper == null) install(window);
+            if (wrapper == null) {
+                install(window);
+            } else if (window.getCallback() != wrapper && rewraps < MAX_REWRAPS) {
+                // Something set another callback on the window since: either it wrapped this one (which then still
+                // gets the touches) or it replaced it (which then does not). Wrapping again covers both; a touch that
+                // reaches two wrappers is only looked at by the outer one (see busy).
+                rewraps++;
+                install(window);
+            }
         }
 
         void deactivate(Window window) {
@@ -148,6 +202,8 @@ final class TabPillDrag {
             window.setCallback(made);
             wrapper = made;
             original = target;
+            wraps++;
+            note("wrapped the window's touches");
         }
 
         /** Every call on the window's callback comes here: all but the touches are passed on untouched. */
@@ -180,6 +236,8 @@ final class TabPillDrag {
 
         /** Looks at a touch, then (unless it is being dragged) passes it on. */
         private boolean onTouch(MotionEvent ev, Window.Callback target) {
+            if (busy) return target.dispatchTouchEvent(ev);
+            touches++;
             try {
                 int action = ev.getActionMasked();
                 if (state == DRAGGING) {
@@ -189,10 +247,14 @@ final class TabPillDrag {
                 }
                 if (action == MotionEvent.ACTION_DOWN) {
                     cancelPending();
-                    if (ev.getPointerCount() == 1 && hitHighlight(ev)) startPending(ev);
+                    if (ev.getPointerCount() == 1 && hitHighlight(ev)) {
+                        downsOnHighlight++;
+                        startPending(ev);
+                    }
                 } else if (state == PENDING) {
                     if (action == MotionEvent.ACTION_MOVE) {
                         if (Math.abs(ev.getRawX() - downX) > slop || Math.abs(ev.getRawY() - downY) > slop) {
+                            note("moved before the hold was long enough (" + holdMs + " ms)");
                             cancelPending();
                         } else {
                             fingerX = ev.getRawX();
@@ -204,18 +266,32 @@ final class TabPillDrag {
                 }
             } catch (Throwable t) {
                 Logger.printException(() -> "TabPillDrag.onTouch failed", t);
+                note("onTouch failed: " + t);
                 reset();
             }
-            return target.dispatchTouchEvent(ev);
+            busy = true;
+            try {
+                return target.dispatchTouchEvent(ev);
+            } finally {
+                busy = false;
+            }
         }
 
         private boolean hitHighlight(MotionEvent ev) {
             ViewGroup barView = bar.get();
             SelectedTabPill.Highlight h = highlight.get();
-            if (barView == null || h == null || !barView.isAttachedToWindow() || !barView.isShown()) return false;
+            if (barView == null || h == null || !barView.isAttachedToWindow() || !barView.isShown()) {
+                lastDown = "no bar on screen";
+                return false;
+            }
             barView.getLocationOnScreen(location);
             float density = barView.getResources().getDisplayMetrics().density;
-            return h.hit(ev.getRawX() - location[0], ev.getRawY() - location[1], HIT_SLOP_DP * density);
+            float x = ev.getRawX() - location[0];
+            float y = ev.getRawY() - location[1];
+            boolean hit = h.hit(x, y, HIT_SLOP_DP * density);
+            lastDown = (hit ? "on" : "missed") + " the highlight: the finger at " + Math.round(x) + "," + Math.round(y)
+                    + " in the bar, " + h.describeShown();
+            return hit;
         }
 
         private void startPending(MotionEvent ev) {
@@ -255,17 +331,22 @@ final class TabPillDrag {
                 }
                 barView.getLocationOnScreen(location);
                 if (!h.beginDrag(barView, fingerX - location[0])) {
+                    note("held, but the highlight could not be picked up (" + h.describeShown() + ")");
                     down.recycle();
                     return;
                 }
+                holds++;
+                note("picked up the highlight");
                 state = DRAGGING;
                 // The tab under the finger was told that a touch started: tell it (and everything above it) that the
                 // touch is over, so it does not click or long-press when the finger lets go.
                 MotionEvent cancel = MotionEvent.obtain(down);
                 cancel.setAction(MotionEvent.ACTION_CANCEL);
+                busy = true;
                 try {
                     if (original != null) original.dispatchTouchEvent(cancel);
                 } finally {
+                    busy = false;
                     cancel.recycle();
                     down.recycle();
                 }
@@ -273,6 +354,7 @@ final class TabPillDrag {
                 barView.invalidate();
             } catch (Throwable t) {
                 Logger.printException(() -> "TabPillDrag.onHold failed", t);
+                note("onHold failed: " + t);
                 reset();
             }
         }
@@ -320,10 +402,15 @@ final class TabPillDrag {
             View tab = target < 0 ? null : barView.getChildAt(target);
             if (tab == null || target == h.selectedIndex()) {
                 // Let go over the tab it came from: nothing to open, the highlight settles back.
+                drops++;
+                note("let go over the tab it came from");
                 h.endDrag();
                 barView.invalidate();
                 return;
             }
+            drops++;
+            opened++;
+            note("dropped on tab " + target + " (the selected one was " + h.selectedIndex() + ")");
             h.dropOn(target, tab.getLeft(), tab.getRight());
             barView.invalidate();
             tap(barView, tab);

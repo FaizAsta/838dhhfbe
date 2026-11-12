@@ -25,6 +25,7 @@ import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+import android.view.Window;
 
 import java.lang.ref.WeakReference;
 import java.util.WeakHashMap;
@@ -151,6 +152,8 @@ public final class FloatingNavBar {
         Bitmap tabPillImage;
         /** "Press and hold the highlight, move it to a tab and let go" is switched on (read with the settings). */
         boolean tabPillDrag;
+        /** The activity's window, whose touches the press-and-hold drag looks at (see TabPillDrag). */
+        WeakReference<Window> window = new WeakReference<>(null);
 
         // The bottom margin of the screen container this class took to 0, and the margin Instagram had there. It is
         // given back when the setting is switched off, once the bar is shown again (while it is hidden the margin
@@ -257,7 +260,8 @@ public final class FloatingNavBar {
     private static void watch(Activity activity) {
         try {
             if (activity.getWindow() == null) return;
-            final View decor = activity.getWindow().getDecorView();
+            final Window activityWindow = activity.getWindow();
+            final View decor = activityWindow.getDecorView();
             final State state;
             synchronized (WATCHED) {
                 State known = WATCHED.get(decor);
@@ -268,6 +272,7 @@ public final class FloatingNavBar {
                     WATCHED.put(decor, state);
                 }
             }
+            state.window = new WeakReference<>(activityWindow);
             if (state.preDraw == null) {
                 // The decor is held weakly: the state is the value of a map that is keyed by the decor.
                 final WeakReference<View> decorRef = new WeakReference<>(decor);
@@ -374,7 +379,7 @@ public final class FloatingNavBar {
         // it does not hold the frame back.
         nativeBlur(decor, state, now);
         // The press-and-hold drag of the highlight, for whichever bar is on screen.
-        tabPillDrag(decor, state);
+        tabPillDrag(state);
 
         if (!state.enabled || state.unsupported) {
             boolean relayout = nativeChanged;
@@ -484,7 +489,7 @@ public final class FloatingNavBar {
      * bar and the highlight that is on screen, or nothing when the setting is off or there is no highlight, which
      * switches the touch handling off again. It only reads what the frame already found.
      */
-    private static void tabPillDrag(View decor, State state) {
+    private static void tabPillDrag(State state) {
         SelectedTabPill.Highlight highlight = null;
         View bar = state.bar.get();
         if (state.tabPill && state.tabPillDrag && bar != null) {
@@ -496,7 +501,7 @@ public final class FloatingNavBar {
                 highlight = NativeBarBlur.highlight(state.nativeBlur);
             }
         }
-        TabPillDrag.sync(decor, bar, highlight);
+        TabPillDrag.sync(state.window.get(), bar, highlight);
     }
 
     /** Finds the bar (and the line above it). Looks again when the one it knew is gone. */

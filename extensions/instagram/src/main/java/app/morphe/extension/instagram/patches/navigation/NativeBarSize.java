@@ -65,7 +65,8 @@ public final class NativeBarSize {
         String pill = NativeBarBlur.debugShape();
         return "== Instagram's own bar, before the size was applied ==\n" + before
                 + "\n\n== After the size was applied ==\n" + (after == null ? "(not checked yet)" : after)
-                + "\n\n== Where the pill is drawn ==\n" + (pill == null ? "(not drawn yet)" : pill);
+                + "\n\n== Where the pill is drawn ==\n" + (pill == null ? "(not drawn yet)" : pill)
+                + "\n\n== Press and hold the highlight ==\n" + TabPillDrag.status();
     }
 
     /** What Instagram had on the bar, what was set on it, and what was given up on. One per bar. */
