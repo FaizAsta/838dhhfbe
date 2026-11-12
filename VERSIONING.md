@@ -1,6 +1,6 @@
 # Versioning
 
-**Current version: 1.8.19**
+**Current version: 1.9.0**
 
 ## Rule
 

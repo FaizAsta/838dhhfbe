@@ -12,14 +12,16 @@ package app.morphe.extension.instagram.patches.navigation;
  * floating bar, when that is switched on instead of the pill, is given the same two numbers (see
  * {@link NativeBarSize}): the width and the height the settings show are the ones it gets.
  * <p>
- * Two values are stored, both in dp:
+ * Three values are stored, all in dp:
  * <ul>
  *   <li><b>side</b>: how far the pill keeps from each side of the screen. A larger side is a narrower pill. The
  *       settings show it the other way round, as a width (a percentage of the screen), so the slider's right end is
  *       the widest pill;</li>
  *   <li><b>gap</b>: the air above and below the pill inside Instagram's own bar. A larger gap is a lower pill. The
  *       settings show it as a height, so the slider's right end is the tallest pill. The pill can never be taller
- *       than Instagram's bar itself (gap 0), because it is drawn inside the bar.</li>
+ *       than Instagram's bar itself (gap 0), because it is drawn inside the bar;</li>
+ *   <li><b>bottom</b>: the air between the bottom of the screen (above the system inset) and the whole bar. A larger
+ *       bottom gap is a bar that floats higher over the page. The settings show it as it is, in dp.</li>
  * </ul>
  */
 public final class FloatingNavSize {
@@ -33,8 +35,16 @@ public final class FloatingNavSize {
     public static final int GAP_MAX_DP = 10;
     public static final int GAP_DEFAULT_DP = 4;
 
-    /** The height of Instagram's tab bar above the system inset, used until the real bar has been measured. */
-    public static final float FALLBACK_BAR_DP = 48f;
+    /** The distance between the bottom of the screen (above the system inset) and the bar. 0 is how it was. */
+    public static final int BOTTOM_MIN_DP = 0;
+    public static final int BOTTOM_MAX_DP = 40;
+    public static final int BOTTOM_DEFAULT_DP = 0;
+
+    /**
+     * The height of Instagram's tab bar above the system inset, used until the real bar has been measured. This is
+     * also the tallest the height slider can make the bar (gap 0): 55 dp.
+     */
+    public static final float FALLBACK_BAR_DP = 55f;
     /** The system inset under the bar (gesture area), used until the real bar has been measured. */
     public static final float FALLBACK_INSET_DP = 16f;
 
@@ -72,6 +82,10 @@ public final class FloatingNavSize {
 
     public static int clampGap(int dp) {
         return Math.max(GAP_MIN_DP, Math.min(GAP_MAX_DP, dp));
+    }
+
+    public static int clampBottom(int dp) {
+        return Math.max(BOTTOM_MIN_DP, Math.min(BOTTOM_MAX_DP, dp));
     }
 
     /** Reads a stored number; anything that is not a whole number gives the fallback. */

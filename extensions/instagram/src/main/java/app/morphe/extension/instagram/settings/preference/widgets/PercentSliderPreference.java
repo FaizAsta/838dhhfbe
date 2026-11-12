@@ -7,7 +7,6 @@
 package app.morphe.extension.instagram.settings.preference.widgets;
 
 import android.content.Context;
-import android.graphics.PorterDuff;
 import android.preference.Preference;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -174,10 +173,7 @@ public class PercentSliderPreference extends Preference {
             seekBar.setEnabled(enabled);
             // Never move a slider under a finger that is dragging it.
             if (!dragging) seekBar.setProgress(access.get());
-            seekBar.getProgressDrawable().setColorFilter(valueColor, PorterDuff.Mode.SRC_IN);
-            if (seekBar.getThumb() != null) {
-                seekBar.getThumb().setColorFilter(valueColor, PorterDuff.Mode.SRC_IN);
-            }
+            SliderStyle.apply(seekBar, valueColor, enabled);
             showValue(seekBar.getProgress());
         }
         view.setEnabled(enabled);

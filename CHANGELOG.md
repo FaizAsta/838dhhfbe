@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.0
+
+* **New: "Bottom gap" slider (Settings > Navigation bar > Floating bar size).** Sets how far the floating bar floats above the bottom of the screen, from 0 to 40 dp (default 0, so nothing changes until it is moved). It applies to the floating navigation bar and to Instagram's own floating bar, sits on top of the system inset under the tabs, and the page still runs down behind the bar. The live preview shows the pill rising over the page.
+* How it works in the code: new `BarBottomGap.java` adds the chosen distance to the bar's own bottom margin (Instagram's margin is kept and the distance is added to it), remembers what it changed, gives it back when both floating bars are switched off, and gives up after repeated resets by Instagram. New setting `floating_nav_bottom_dp` (`Settings.java`, `Pref.java`, `FloatingNavSize.java`), wired into `FloatingNavBar.java` and `FloatingNavSizePreference.java`; new string `piko_floating_nav_bottom`.
+* **Change: the height slider now goes up to 55 dp (was 48 dp).** `FloatingNavSize.FALLBACK_BAR_DP` is 55. It is the tallest bar Instagram's own floating bar can be made; the floating navigation bar's pill is still limited by the real height of Instagram's bar, which is measured.
+* **Change: the settings of the Navigation bar screen no longer show a description under their title** (all rows, including the tabs and the startup tab). The texts are still in `strings.xml`.
+* **Change: new look for the sliders.** A thick rounded track (accent colour up to the thumb, grey after it) and a pill-shaped thumb in the colour of the page with a white edge and a soft shadow, as in the picture sent. New `SliderStyle.java`, used by the width, height and bottom gap sliders, the blur and transparency sliders and the focus lock duration slider.
+* Not built or run on a phone: the changes were checked by reading only. If the build fails, send the error text.
+
 ## 1.8.19
 
 * **Fix: the icons of Instagram's own floating bar are now spread across the whole pill, like on the floating navigation bar.** From your picture (top: the floating navigation bar, bottom: Instagram's own bar): on Instagram's bar the five icons were bunched toward the middle, with a wide empty stretch before the first and after the last one, while on the floating navigation bar each icon sits in the middle of a fifth of the pill. Cause: Instagram's bar has a side padding (24 dp on the phone whose bar info was sent earlier: a 384 dp bar) and lays the tabs out in what is left, while the pill fills the whole bar. On those numbers the icons were 67 dp apart and the first one 58 dp from the pill's edge; now they are 77 dp apart and the first is 38 dp in, the same as the top bar.

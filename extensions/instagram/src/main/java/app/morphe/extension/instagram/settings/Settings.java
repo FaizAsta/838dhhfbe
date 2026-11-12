@@ -129,6 +129,10 @@ public class Settings {
             new StringSetting("floating_nav_side_dp", String.valueOf(FloatingNavSize.SIDE_DEFAULT_DP), NOT_REQUIRED);
     public static final StringSetting FLOATING_NAV_GAP_DP =
             new StringSetting("floating_nav_gap_dp", String.valueOf(FloatingNavSize.GAP_DEFAULT_DP), NOT_REQUIRED);
+    // The distance between the bottom of the screen and the floating bar, in dp (a larger value is a bar that floats
+    // higher). Chosen with the third slider in the Navigation bar screen. See FloatingNavSize and BarBottomGap.
+    public static final StringSetting FLOATING_NAV_BOTTOM_DP =
+            new StringSetting("floating_nav_bottom_dp", String.valueOf(FloatingNavSize.BOTTOM_DEFAULT_DP), NOT_REQUIRED);
     // The highlight behind the selected tab of the floating navigation bar, drawn from a picture the user picks (or a
     // soft capsule until one is picked). It always has the size of the selected tab, so it follows the width and
     // height sliders above. Only for the floating navigation bar (FLOATING_NAV_BAR), not for Instagram's own floating

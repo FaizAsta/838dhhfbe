@@ -14,7 +14,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.PorterDuff;
 import android.graphics.RectF;
 import android.graphics.RenderEffect;
 import android.graphics.RenderNode;
@@ -40,8 +39,8 @@ import app.morphe.extension.instagram.settings.Settings;
 import app.morphe.extension.instagram.utils.Pref;
 
 /**
- * The size of the floating navigation bar: a live preview of the pill and two sliders, a width and a height, all in
- * one row of the settings screen.
+ * The size of the floating navigation bar: a live preview of the pill and three sliders, a width, a height and a
+ * bottom gap (how far the bar floats above the bottom of the screen), all in one row of the settings screen.
  * <p>
  * The preview is redrawn on every step of a slider, so the pill grows and shrinks under the finger. It is drawn from
  * the same numbers and with the same shade as the real bar ({@link FloatingNavSize}, {@link FloatingNavBar}), at the
@@ -101,12 +100,16 @@ public class FloatingNavSizePreference extends Preference {
     private TextView widthValue;
     private TextView heightLabel;
     private TextView heightValue;
+    private TextView bottomLabel;
+    private TextView bottomValue;
     private SeekBar widthBar;
     private SeekBar heightBar;
+    private SeekBar bottomBar;
     private PreviewView preview;
 
     private int sideDp = FloatingNavSize.SIDE_DEFAULT_DP;
     private int gapDp = FloatingNavSize.GAP_DEFAULT_DP;
+    private int bottomDp = FloatingNavSize.BOTTOM_DEFAULT_DP;
     /** True between a touch going down and coming up on a slider, so a drag writes once at the end. */
     private boolean dragging;
 
@@ -197,14 +200,21 @@ public class FloatingNavSizePreference extends Preference {
         widthValue = new TextView(context);
         addSliderHeader(context, row, widthLabel, widthValue, str("piko_floating_nav_width"));
         widthBar = addSlider(context, row,
-                FloatingNavSize.SIDE_MAX_DP - FloatingNavSize.SIDE_MIN_DP, new SizeListener(true));
+                FloatingNavSize.SIDE_MAX_DP - FloatingNavSize.SIDE_MIN_DP, new SizeListener(KIND_WIDTH));
 
         // Height.
         heightLabel = new TextView(context);
         heightValue = new TextView(context);
         addSliderHeader(context, row, heightLabel, heightValue, str("piko_floating_nav_height"));
         heightBar = addSlider(context, row,
-                FloatingNavSize.GAP_MAX_DP - FloatingNavSize.GAP_MIN_DP, new SizeListener(false));
+                FloatingNavSize.GAP_MAX_DP - FloatingNavSize.GAP_MIN_DP, new SizeListener(KIND_HEIGHT));
+
+        // Bottom gap: how far the whole bar floats above the bottom of the screen.
+        bottomLabel = new TextView(context);
+        bottomValue = new TextView(context);
+        addSliderHeader(context, row, bottomLabel, bottomValue, str("piko_floating_nav_bottom"));
+        bottomBar = addSlider(context, row,
+                FloatingNavSize.BOTTOM_MAX_DP - FloatingNavSize.BOTTOM_MIN_DP, new SizeListener(KIND_BOTTOM));
 
         return row;
     }
@@ -254,19 +264,23 @@ public class FloatingNavSizePreference extends Preference {
         return bar;
     }
 
-    /** One slider's listener. {@code width} tells which of the two it belongs to. */
-    private final class SizeListener implements SeekBar.OnSeekBarChangeListener {
-        private final boolean width;
+    private static final int KIND_WIDTH = 0;
+    private static final int KIND_HEIGHT = 1;
+    private static final int KIND_BOTTOM = 2;
 
-        SizeListener(boolean width) {
-            this.width = width;
+    /** One slider's listener. {@code kind} tells which of the three it belongs to. */
+    private final class SizeListener implements SeekBar.OnSeekBarChangeListener {
+        private final int kind;
+
+        SizeListener(int kind) {
+            this.kind = kind;
         }
 
         @Override
         public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
             if (!fromUser) return;
             // The preview and the numbers follow the finger on every step.
-            takeProgress(width, progress);
+            takeProgress(kind, progress);
             // A keyboard or accessibility step moves the slider without a touch, so it never reaches
             // onStopTrackingTouch and has to be written here.
             if (!dragging) save();
@@ -281,17 +295,22 @@ public class FloatingNavSizePreference extends Preference {
         public void onStopTrackingTouch(SeekBar bar) {
             // A drag writes once it settles, rather than on every notch it passes.
             dragging = false;
-            takeProgress(width, bar.getProgress());
+            takeProgress(kind, bar.getProgress());
             save();
         }
     }
 
-    /** A slider moved: the width slider's right end is the widest pill, the height slider's the tallest. */
-    private void takeProgress(boolean width, int progress) {
-        if (width) {
+    /**
+     * A slider moved: the width slider's right end is the widest pill, the height slider's the tallest, and the
+     * bottom gap slider's the highest above the bottom of the screen.
+     */
+    private void takeProgress(int kind, int progress) {
+        if (kind == KIND_WIDTH) {
             sideDp = FloatingNavSize.clampSide(FloatingNavSize.SIDE_MAX_DP - progress);
-        } else {
+        } else if (kind == KIND_HEIGHT) {
             gapDp = FloatingNavSize.clampGap(FloatingNavSize.GAP_MAX_DP - progress);
+        } else {
+            bottomDp = FloatingNavSize.clampBottom(FloatingNavSize.BOTTOM_MIN_DP + progress);
         }
         showValues();
     }
@@ -299,12 +318,14 @@ public class FloatingNavSizePreference extends Preference {
     private void save() {
         Pref.setFloatingNavSideDp(sideDp);
         Pref.setFloatingNavGapDp(gapDp);
+        Pref.setFloatingNavBottomDp(bottomDp);
     }
 
     private void reset() {
         if (!isEnabled()) return;
         sideDp = FloatingNavSize.SIDE_DEFAULT_DP;
         gapDp = FloatingNavSize.GAP_DEFAULT_DP;
+        bottomDp = FloatingNavSize.BOTTOM_DEFAULT_DP;
         syncSliders();
         showValues();
         save();
@@ -314,6 +335,7 @@ public class FloatingNavSizePreference extends Preference {
     private void syncSliders() {
         if (widthBar != null) widthBar.setProgress(FloatingNavSize.SIDE_MAX_DP - sideDp);
         if (heightBar != null) heightBar.setProgress(FloatingNavSize.GAP_MAX_DP - gapDp);
+        if (bottomBar != null) bottomBar.setProgress(bottomDp - FloatingNavSize.BOTTOM_MIN_DP);
     }
 
     /** Shows the numbers next to the sliders and redraws the preview. */
@@ -325,7 +347,8 @@ public class FloatingNavSizePreference extends Preference {
         if (heightValue != null) {
             heightValue.setText(Math.round(FloatingNavSize.pillHeightDp(gapDp)) + " dp");
         }
-        if (preview != null) preview.setSize(sideDp, gapDp);
+        if (bottomValue != null) bottomValue.setText(bottomDp + " dp");
+        if (preview != null) preview.setSize(sideDp, gapDp, bottomDp);
     }
 
     @Override
@@ -350,6 +373,7 @@ public class FloatingNavSizePreference extends Preference {
         if (!dragging) {
             sideDp = Pref.floatingNavSideDp();
             gapDp = Pref.floatingNavGapDp();
+            bottomDp = Pref.floatingNavBottomDp();
             syncSliders();
         }
 
@@ -369,10 +393,13 @@ public class FloatingNavSizePreference extends Preference {
         }
         if (widthLabel != null) widthLabel.setTextColor(titleColor);
         if (heightLabel != null) heightLabel.setTextColor(titleColor);
+        if (bottomLabel != null) bottomLabel.setTextColor(titleColor);
         if (widthValue != null) widthValue.setTextColor(valueColor);
         if (heightValue != null) heightValue.setTextColor(valueColor);
+        if (bottomValue != null) bottomValue.setTextColor(valueColor);
         tint(widthBar, enabled, valueColor);
         tint(heightBar, enabled, valueColor);
+        tint(bottomBar, enabled, valueColor);
         if (preview != null) {
             preview.refreshTheme();
             preview.setAlpha(enabled ? 1f : 0.45f);
@@ -384,10 +411,7 @@ public class FloatingNavSizePreference extends Preference {
     private static void tint(SeekBar bar, boolean enabled, int color) {
         if (bar == null) return;
         bar.setEnabled(enabled);
-        bar.getProgressDrawable().setColorFilter(color, PorterDuff.Mode.SRC_IN);
-        if (bar.getThumb() != null) {
-            bar.getThumb().setColorFilter(color, PorterDuff.Mode.SRC_IN);
-        }
+        SliderStyle.apply(bar, color, enabled);
     }
 
     /**
@@ -423,6 +447,8 @@ public class FloatingNavSizePreference extends Preference {
         private int measuredBase = -1;
         private int sideDp = FloatingNavSize.SIDE_DEFAULT_DP;
         private int gapDp = FloatingNavSize.GAP_DEFAULT_DP;
+        /** How far the whole bar floats above the bottom of the screen (above the system inset), in dp. */
+        private int bottomDp = FloatingNavSize.BOTTOM_DEFAULT_DP;
         private int page = Color.BLACK;
         private int text = Color.WHITE;
         private boolean dark = true;
@@ -460,10 +486,11 @@ public class FloatingNavSizePreference extends Preference {
             return Math.max(1f, Math.min(metrics.widthPixels, metrics.heightPixels));
         }
 
-        void setSize(int side, int gap) {
-            if (sideDp == side && gapDp == gap) return;
+        void setSize(int side, int gap, int bottom) {
+            if (sideDp == side && gapDp == gap && bottomDp == bottom) return;
             sideDp = side;
             gapDp = gap;
+            bottomDp = bottom;
             invalidate();
         }
 
@@ -564,11 +591,14 @@ public class FloatingNavSizePreference extends Preference {
             float bar = FloatingNavSize.barDp() * density;
             float side = sideDp * density;
             float gap = gapDp * density;
+            // The bar floats this far above the bottom of the screen, on top of the system inset. The preview keeps
+            // its height (so the sliders below do not move under the finger): the pill rises over the page instead.
+            float raise = bottomDp * density;
 
             float left = side;
             float right = w - side;
-            float top = h - inset - bar + gap;
-            float bottom = h - inset - gap;
+            float top = h - inset - raise - bar + gap;
+            float bottom = h - inset - raise - gap;
             if (right - left < 8f || bottom - top < 8f) return;
             float radius = (bottom - top) / 2f;
 

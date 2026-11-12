@@ -1089,7 +1089,7 @@ public class ScreenBuilder {
         addPreference(
                 helper.switchPreference(
                         str("piko_floating_nav_bar"),
-                        str("piko_floating_nav_bar_desc"),
+                        "",
                         Settings.FLOATING_NAV_BAR
                 )
         );
@@ -1101,7 +1101,7 @@ public class ScreenBuilder {
                 helper.availableWhen(
                         helper.floatingNavSizePreference(
                                 str("piko_floating_nav_size"),
-                                str("piko_floating_nav_size_desc")
+                                ""
                         ),
                         () -> Pref.floatingNavBar() || Pref.nativeFloatingNav()
                 )
@@ -1115,7 +1115,7 @@ public class ScreenBuilder {
                 helper.availableWhen(
                         helper.switchPreference(
                                 str("piko_custom_tab_pill"),
-                                str("piko_custom_tab_pill_desc"),
+                                "",
                                 Settings.CUSTOM_TAB_PILL
                         ),
                         () -> Pref.floatingNavBar() || Pref.nativeFloatingNav()
@@ -1126,7 +1126,7 @@ public class ScreenBuilder {
                 helper.availableWhen(
                         helper.switchPreference(
                                 str("piko_custom_tab_pill_drag"),
-                                str("piko_custom_tab_pill_drag_desc"),
+                                "",
                                 Settings.CUSTOM_TAB_PILL_DRAG
                         ),
                         () -> (Pref.floatingNavBar() || Pref.nativeFloatingNav()) && Pref.customTabPill()
@@ -1136,7 +1136,7 @@ public class ScreenBuilder {
                 helper.availableWhen(
                         helper.buttonPreference(
                                 str("piko_tab_pill_pick_image"),
-                                str("piko_tab_pill_pick_image_desc"),
+                                "",
                                 "piko_tab_pill_pick_image"
                         ),
                         () -> (Pref.floatingNavBar() || Pref.nativeFloatingNav()) && Pref.customTabPill()
@@ -1146,7 +1146,7 @@ public class ScreenBuilder {
                 helper.availableWhen(
                         helper.buttonPreference(
                                 str("piko_tab_pill_reset_image"),
-                                str("piko_tab_pill_reset_image_desc"),
+                                "",
                                 "piko_tab_pill_reset_image"
                         ),
                         () -> (Pref.floatingNavBar() || Pref.nativeFloatingNav()) && Pref.customTabPill()
@@ -1158,7 +1158,7 @@ public class ScreenBuilder {
         addPreference(
                 helper.switchPreference(
                         str("piko_native_floating_nav"),
-                        str("piko_native_floating_nav_desc"),
+                        "",
                         Settings.NATIVE_FLOATING_NAV
                 )
         );
@@ -1169,7 +1169,7 @@ public class ScreenBuilder {
                 helper.availableWhen(
                         helper.switchPreference(
                                 str("piko_native_floating_nav_blur"),
-                                str("piko_native_floating_nav_blur_desc"),
+                                "",
                                 Settings.NATIVE_FLOATING_NAV_BLUR
                         ),
                         () -> Pref.nativeFloatingNav()
@@ -1183,7 +1183,7 @@ public class ScreenBuilder {
                         helper.percentSliderPreference(
                                 "piko_native_floating_nav_blur_level",
                                 str("piko_native_floating_nav_blur_level"),
-                                str("piko_native_floating_nav_blur_level_desc"),
+                                "",
                                 new PercentSliderPreference.Access() {
                                     @Override public int get() { return Pref.nativeFloatingNavBlurLevel(); }
                                     @Override public void set(int percent) { Pref.setNativeFloatingNavBlurLevel(percent); }
@@ -1198,7 +1198,7 @@ public class ScreenBuilder {
                         helper.percentSliderPreference(
                                 "piko_native_floating_nav_transparency",
                                 str("piko_native_floating_nav_transparency"),
-                                str("piko_native_floating_nav_transparency_desc"),
+                                "",
                                 new PercentSliderPreference.Access() {
                                     @Override public int get() { return Pref.nativeFloatingNavTransparency(); }
                                     @Override public void set(int percent) { Pref.setNativeFloatingNavTransparency(percent); }
@@ -1215,7 +1215,7 @@ public class ScreenBuilder {
                 helper.availableWhen(
                         helper.switchPreference(
                                 str("piko_hide_gesture_line"),
-                                str("piko_hide_gesture_line_desc"),
+                                "",
                                 Settings.HIDE_GESTURE_LINE
                         ),
                         () -> Pref.floatingNavBar() || Pref.nativeFloatingNav()
@@ -1228,7 +1228,7 @@ public class ScreenBuilder {
                 helper.availableWhen(
                         helper.buttonPreference(
                                 str("piko_copy_nav_bar_info"),
-                                str("piko_copy_nav_bar_info_desc"),
+                                "",
                                 "piko_copy_nav_bar_info"
                         ),
                         () -> Pref.nativeFloatingNav()
@@ -1239,7 +1239,7 @@ public class ScreenBuilder {
         addPreference(
                 helper.switchPreference(
                         str("piko_remove_selected_tab_pill"),
-                        str("piko_remove_selected_tab_pill_desc"),
+                        "",
                         Settings.REMOVE_SELECTED_TAB_PILL
                 )
         );
@@ -1249,14 +1249,14 @@ public class ScreenBuilder {
         addPreference(
                 helper.navigationBarPreference(
                         str("piko_navigation_tabs_title"),
-                        str("piko_navigation_tabs_summary")
+                        ""
                 )
         );
 
         addPreference(
                 helper.navigationStartupPreference(
                         str("piko_navigation_startup_tab"),
-                        str("piko_navigation_startup_tab_summary")
+                        ""
                 )
         );
     }

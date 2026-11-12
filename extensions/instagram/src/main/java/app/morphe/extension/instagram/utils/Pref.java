@@ -526,6 +526,17 @@ public class Pref {
                 SharedPref.getStringPref(Settings.FLOATING_NAV_GAP_DP), FloatingNavSize.GAP_DEFAULT_DP));
     }
 
+    /** Distance between the bottom of the screen and the floating bar, in dp (a larger value floats higher). */
+    public static int floatingNavBottomDp() {
+        return FloatingNavSize.clampBottom(FloatingNavSize.parse(
+                SharedPref.getStringPref(Settings.FLOATING_NAV_BOTTOM_DP), FloatingNavSize.BOTTOM_DEFAULT_DP));
+    }
+
+    public static boolean setFloatingNavBottomDp(int dp) {
+        return SharedPref.setStringPref(Settings.FLOATING_NAV_BOTTOM_DP.key,
+                String.valueOf(FloatingNavSize.clampBottom(dp)));
+    }
+
     public static boolean setFloatingNavSideDp(int dp) {
         return SharedPref.setStringPref(Settings.FLOATING_NAV_SIDE_DP.key,
                 String.valueOf(FloatingNavSize.clampSide(dp)));

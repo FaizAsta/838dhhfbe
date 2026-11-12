@@ -132,6 +132,10 @@ public final class FloatingNavBar {
         /** The size chosen in the settings, in dp. */
         int sideDp = FloatingNavSize.SIDE_DEFAULT_DP;
         int gapDp = FloatingNavSize.GAP_DEFAULT_DP;
+        /** The distance of the bar from the bottom of the screen, in dp (see BarBottomGap). */
+        int bottomDp = FloatingNavSize.BOTTOM_DEFAULT_DP;
+        /** What was done to the bar's bottom margin, to give it back (see BarBottomGap). */
+        BarBottomGap.Memory bottomGap = new BarBottomGap.Memory();
         /** The bar did not honour its padding: the pill stays off until the app is restarted. */
         boolean unsupported;
 
@@ -339,6 +343,7 @@ public final class FloatingNavBar {
             state.lastPref = now;
             state.sideDp = Pref.floatingNavSideDp();
             state.gapDp = Pref.floatingNavGapDp();
+            state.bottomDp = Pref.floatingNavBottomDp();
             state.tabPill = Pref.customTabPill();
             state.tabPillDrag = Pref.tabPillDrag();
             // Read from storage only when the picture was replaced or deleted (see SelectedTabPill.image).
@@ -355,11 +360,13 @@ public final class FloatingNavBar {
                 state.enabled = wanted;
                 // Switching it on again gives the pill another try.
                 if (wanted) state.unsupported = false;
+                BarBottomGap.forgetFailures(state.bottomGap);
             }
             if (nativeSetting != state.nativeSetting) {
                 state.nativeSetting = nativeSetting;
                 // Switched off, or on again: a size that Instagram's bar did not take gets another try.
                 NativeBarSize.forgetFailures(state.nativeSize);
+                BarBottomGap.forgetFailures(state.bottomGap);
             }
             state.nativeBlurLevel = Pref.nativeFloatingNavBlurLevel();
             state.nativeTransparency = Pref.nativeFloatingNavTransparency();
@@ -375,6 +382,8 @@ public final class FloatingNavBar {
         // Instagram chose back when its setting is switched off. Independent of the pill, which is off while
         // Instagram's bar is on.
         boolean nativeChanged = nativeSize(decor, state, now);
+        // The distance between the bottom of the screen and whichever floating bar is on (the pill or Instagram's).
+        if (bottomGap(decor, state, now)) nativeChanged = true;
         // The blur behind Instagram's own bar. It only changes how the bar's background is drawn, never its layout, so
         // it does not hold the frame back.
         nativeBlur(decor, state, now);
@@ -457,6 +466,24 @@ public final class FloatingNavBar {
     }
 
     /**
+     * Keeps the bar the chosen distance above the bottom of the screen (see {@link BarBottomGap}) while a floating
+     * bar is on: the pill of the floating navigation bar, or Instagram's own floating bar. Gives the bar its own
+     * margin back when both are switched off. True when the bar's layout changed.
+     */
+    private static boolean bottomGap(View decor, State state, long now) {
+        BarBottomGap.Memory memory = state.bottomGap;
+        boolean floating = (state.enabled && !state.unsupported) || (state.nativeSetting && state.nativeBar);
+        if (!floating && !memory.isApplied()) return false;
+        View bar = floating ? findBar(decor, state, now) : state.bar.get();
+        if (bar == null || !bar.isAttachedToWindow()) return false;
+        if (!floating) return BarBottomGap.restore(bar, memory);
+        // Hidden (a chat covers it): nothing to move. What was set stays until the bar is shown again.
+        if (bar.getVisibility() != View.VISIBLE) return false;
+        float density = bar.getResources().getDisplayMetrics().density;
+        return BarBottomGap.apply(bar, Math.round(state.bottomDp * density), memory);
+    }
+
+    /**
      * Lays out the pill of Instagram's own floating bar (see {@link NativeBarBlur}) while "Instagram's own floating
      * bar" is on: as wide and as tall as the sliders say and centered on the icons, with the live blur on it while
      * "Blur behind Instagram's own floating bar" is on as well, and with Instagram's own background (fitted the same
@@ -534,6 +561,7 @@ public final class FloatingNavBar {
             state.sinkTaken = false;
             state.frame = new BarFrameRemover.Memory();
             state.nativeSize = new NativeBarSize.Memory();
+            state.bottomGap = new BarBottomGap.Memory();
             state.nativeBlur = new NativeBarBlur.Memory();
             // The old bar's translation is gone with it. Whether the navigation bar is hidden belongs to the window.
             state.gesture.shifted = false;

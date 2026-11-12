@@ -284,9 +284,10 @@
     <string name="piko_floating_nav_bar">Floating navigation bar</string>
     <string name="piko_floating_nav_bar_desc">Replaces the bottom bar (Home, Reels, Messages, Search, Profile) with a floating pill that stands over the whole screen. The old bar background and the line above it are removed and the page runs all the way down behind the pill. Applies as soon as you go back to the app.</string>
     <string name="piko_floating_nav_size">Floating bar size</string>
-    <string name="piko_floating_nav_size_desc">Drag the sliders to change the width and the height of the floating bar. The preview changes as you drag; the bar itself changes as soon as you go back to the app. Applies to the floating navigation bar and to Instagram\'s own floating bar. Only available while one of the two is on.</string>
+    <string name="piko_floating_nav_size_desc">Drag the sliders to change the width and the height of the floating bar, and how far it floats above the bottom of the screen (bottom gap). The preview changes as you drag; the bar itself changes as soon as you go back to the app. Applies to the floating navigation bar and to Instagram\'s own floating bar. Only available while one of the two is on.</string>
     <string name="piko_floating_nav_width">Width</string>
     <string name="piko_floating_nav_height">Height</string>
+    <string name="piko_floating_nav_bottom">Bottom gap</string>
     <string name="piko_floating_nav_size_reset">Reset</string>
     <string name="piko_floating_nav_size_preview">Preview of the floating navigation bar</string>
     <string name="piko_custom_tab_pill">Custom selected tab pill</string>

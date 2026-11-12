@@ -7,7 +7,6 @@
 package app.morphe.extension.instagram.settings.preference.widgets;
 
 import android.content.Context;
-import android.graphics.PorterDuff;
 import android.preference.Preference;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -146,12 +145,7 @@ public class FocusLockDurationPreference extends Preference {
         if (seekBar != null) {
             seekBar.setEnabled(enabled);
             seekBar.setProgress(FocusLockDuration.currentStep());
-            seekBar.getProgressDrawable().setColorFilter(
-                    valueColor, PorterDuff.Mode.SRC_IN
-            );
-            if (seekBar.getThumb() != null) {
-                seekBar.getThumb().setColorFilter(valueColor, PorterDuff.Mode.SRC_IN);
-            }
+            SliderStyle.apply(seekBar, valueColor, enabled);
             showValue(seekBar.getProgress());
         }
         view.setEnabled(enabled);
