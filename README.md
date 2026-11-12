@@ -1,6 +1,6 @@
 # Piko
 
-**Version 1.9.0**
+**Version 1.9.1**
 
 Morphe patches for **Instagram**, based on the official Piko dev build (3.11.0-dev.5).
 All Instagram patches and settings from Piko are included, plus an optional floating navigation bar (Settings > Navigation bar > Floating navigation bar, off by default) whose width and height can be set with sliders that show a live preview (Settings > Navigation bar > Floating bar size), a switch that removes the rounded pill behind the selected tab of the bottom bar (Settings > Navigation bar > Remove selected tab pill, on by default), and an experimental switch that turns on the floating bar built into Instagram itself (Settings > Navigation bar > Instagram's own floating bar, off by default), whose width and height follow the same sliders, and an optional switch that gives that bar a live blur, so the page behind it shows through, blurred (Settings > Navigation bar > Blur behind Instagram's own floating bar, off by default, Android 12 or newer), with two sliders from 0 to 100% under it for the blur amount and the transparency of that bar (the live preview shows both).

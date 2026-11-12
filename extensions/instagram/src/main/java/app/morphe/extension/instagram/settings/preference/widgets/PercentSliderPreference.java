@@ -19,7 +19,8 @@ import android.widget.TextView;
 /**
  * A slider row from 0 to 100 %, with the title and the value on one line and the description under it. Used for the
  * blur and the transparency of Instagram's own floating bar. The value is read and written through {@link Access},
- * and written when a drag settles (and at once for a keyboard or accessibility step).
+ * and written when a drag settles (and at once for a keyboard or accessibility step). The thumb glides under the
+ * finger (see {@link SmoothSlider}); the value is a whole percent.
  */
 public class PercentSliderPreference extends Preference {
 
@@ -38,8 +39,8 @@ public class PercentSliderPreference extends Preference {
     private TextView valueView;
     private TextView summaryView;
     private SeekBar seekBar;
-    /** True between a touch going down and coming up, so a drag writes once at the end. */
-    private boolean dragging;
+    /** Makes the thumb glide, and tells this row the value (0 to 100) it is on. */
+    private SmoothSlider slider;
 
     public PercentSliderPreference(Context context, Access access) {
         super(context);
@@ -100,35 +101,27 @@ public class PercentSliderPreference extends Preference {
         row.addView(summaryView, summaryParams);
 
         seekBar = new SeekBar(context);
-        seekBar.setMax(100);
         seekBar.setPadding(
                 seekBar.getPaddingLeft(),
                 InstagramPreferenceStyle.dp(context, 10),
                 seekBar.getPaddingRight(),
                 0
         );
-        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+        slider = new SmoothSlider(seekBar, 100, new SmoothSlider.Listener() {
             @Override
-            public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
-                if (!fromUser) return;
-                showValue(progress);
-                access.live(progress);
+            void onStep(int percent, boolean dragging) {
+                showValue(percent);
+                access.live(percent);
                 // Accessibility actions and keyboard input move the slider without a touch, so they never reach
-                // onStopTrackingTouch and have to be written here.
-                if (!dragging) access.set(progress);
+                // onSettle and have to be written here.
+                if (!dragging) access.set(percent);
             }
 
             @Override
-            public void onStartTrackingTouch(SeekBar bar) {
-                dragging = true;
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar bar) {
-                // A drag writes once it settles, rather than on every notch it passes.
-                dragging = false;
-                access.set(bar.getProgress());
-                showValue(bar.getProgress());
+            void onSettle(int percent) {
+                // A drag writes once it settles, rather than on every percent it passes.
+                access.set(percent);
+                showValue(percent);
             }
         });
         row.addView(seekBar, new LinearLayout.LayoutParams(
@@ -171,10 +164,10 @@ public class PercentSliderPreference extends Preference {
         }
         if (seekBar != null) {
             seekBar.setEnabled(enabled);
-            // Never move a slider under a finger that is dragging it.
-            if (!dragging) seekBar.setProgress(access.get());
+            // Never moves a slider under a finger that is dragging it.
+            slider.set(access.get(), false);
             SliderStyle.apply(seekBar, valueColor, enabled);
-            showValue(seekBar.getProgress());
+            showValue(slider.step());
         }
         view.setEnabled(enabled);
     }

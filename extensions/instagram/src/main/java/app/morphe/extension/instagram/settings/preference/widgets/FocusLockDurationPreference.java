@@ -22,15 +22,16 @@ import app.morphe.extension.instagram.patches.focusLock.FocusLockDuration;
  * The lock duration, as a slider sitting in the screen rather than behind a dialog.
  *
  * The steps are the ones in {@link FocusLockDuration}, which run from a minute to a few months,
- * so the slider moves in even notches while the time it represents grows quickly.
+ * so the slider has even notches while the time it represents grows quickly. The thumb glides under the finger
+ * (see {@link SmoothSlider}) and eases onto the nearest notch when it is let go.
  */
 public class FocusLockDurationPreference extends Preference {
 
     private TextView titleView;
     private TextView valueView;
     private SeekBar seekBar;
-    /** True between a touch going down and coming up, so a drag writes once at the end. */
-    private boolean dragging;
+    /** Makes the thumb glide, and tells this row the step it is on. */
+    private SmoothSlider slider;
 
     public FocusLockDurationPreference(Context context) {
         super(context);
@@ -81,34 +82,26 @@ public class FocusLockDurationPreference extends Preference {
         ));
 
         seekBar = new SeekBar(context);
-        seekBar.setMax(FocusLockDuration.stepCount() - 1);
         seekBar.setPadding(
                 seekBar.getPaddingLeft(),
                 InstagramPreferenceStyle.dp(context, 10),
                 seekBar.getPaddingRight(),
                 0
         );
-        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+        slider = new SmoothSlider(seekBar, FocusLockDuration.stepCount() - 1, new SmoothSlider.Listener() {
             @Override
-            public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
-                if (!fromUser) return;
-                showValue(progress);
+            void onStep(int step, boolean dragging) {
+                showValue(step);
                 // Accessibility actions and keyboard input move the slider without a touch, so
-                // they never reach onStopTrackingTouch and have to be written here.
-                if (!dragging) FocusLockDuration.setStep(progress);
+                // they never reach onSettle and have to be written here.
+                if (!dragging) FocusLockDuration.setStep(step);
             }
 
             @Override
-            public void onStartTrackingTouch(SeekBar bar) {
-                dragging = true;
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar bar) {
+            void onSettle(int step) {
                 // A drag writes once it settles, rather than on every notch it passes.
-                dragging = false;
-                FocusLockDuration.setStep(bar.getProgress());
-                showValue(bar.getProgress());
+                FocusLockDuration.setStep(step);
+                showValue(step);
             }
         });
         row.addView(seekBar, new LinearLayout.LayoutParams(
@@ -144,9 +137,9 @@ public class FocusLockDurationPreference extends Preference {
         }
         if (seekBar != null) {
             seekBar.setEnabled(enabled);
-            seekBar.setProgress(FocusLockDuration.currentStep());
+            slider.set(FocusLockDuration.currentStep(), false);
             SliderStyle.apply(seekBar, valueColor, enabled);
-            showValue(seekBar.getProgress());
+            showValue(slider.step());
         }
         view.setEnabled(enabled);
     }

@@ -42,6 +42,9 @@ import app.morphe.extension.instagram.utils.Pref;
  * The size of the floating navigation bar: a live preview of the pill and three sliders, a width, a height and a
  * bottom gap (how far the bar floats above the bottom of the screen), all in one row of the settings screen.
  * <p>
+ * The thumbs glide under the finger (see {@link SmoothSlider}); the sizes are still whole dp, so the preview and the
+ * numbers change each time the thumb passes the middle between two values.
+ * <p>
  * The preview is redrawn on every step of a slider, so the pill grows and shrinks under the finger. It is drawn from
  * the same numbers and with the same shade as the real bar ({@link FloatingNavSize}, {@link FloatingNavBar}), at the
  * proportions of the real screen, so what it shows is what the bar will look like. The values are written when a drag
@@ -105,6 +108,10 @@ public class FloatingNavSizePreference extends Preference {
     private SeekBar widthBar;
     private SeekBar heightBar;
     private SeekBar bottomBar;
+    /** What makes each thumb glide, and tells this row the value it is on. */
+    private SmoothSlider widthSlider;
+    private SmoothSlider heightSlider;
+    private SmoothSlider bottomSlider;
     private PreviewView preview;
 
     private int sideDp = FloatingNavSize.SIDE_DEFAULT_DP;
@@ -199,22 +206,25 @@ public class FloatingNavSizePreference extends Preference {
         widthLabel = new TextView(context);
         widthValue = new TextView(context);
         addSliderHeader(context, row, widthLabel, widthValue, str("piko_floating_nav_width"));
-        widthBar = addSlider(context, row,
+        widthSlider = addSlider(context, row,
                 FloatingNavSize.SIDE_MAX_DP - FloatingNavSize.SIDE_MIN_DP, new SizeListener(KIND_WIDTH));
+        widthBar = widthSlider.bar();
 
         // Height.
         heightLabel = new TextView(context);
         heightValue = new TextView(context);
         addSliderHeader(context, row, heightLabel, heightValue, str("piko_floating_nav_height"));
-        heightBar = addSlider(context, row,
+        heightSlider = addSlider(context, row,
                 FloatingNavSize.GAP_MAX_DP - FloatingNavSize.GAP_MIN_DP, new SizeListener(KIND_HEIGHT));
+        heightBar = heightSlider.bar();
 
         // Bottom gap: how far the whole bar floats above the bottom of the screen.
         bottomLabel = new TextView(context);
         bottomValue = new TextView(context);
         addSliderHeader(context, row, bottomLabel, bottomValue, str("piko_floating_nav_bottom"));
-        bottomBar = addSlider(context, row,
+        bottomSlider = addSlider(context, row,
                 FloatingNavSize.BOTTOM_MAX_DP - FloatingNavSize.BOTTOM_MIN_DP, new SizeListener(KIND_BOTTOM));
+        bottomBar = bottomSlider.bar();
 
         return row;
     }
@@ -246,22 +256,22 @@ public class FloatingNavSizePreference extends Preference {
         ));
     }
 
-    private static SeekBar addSlider(Context context, LinearLayout row, int max,
-                                     SeekBar.OnSeekBarChangeListener listener) {
+    /** A slider with the values 0 to {@code steps}, whose thumb glides (see {@link SmoothSlider}). */
+    private static SmoothSlider addSlider(Context context, LinearLayout row, int steps,
+                                          SmoothSlider.Listener listener) {
         SeekBar bar = new SeekBar(context);
-        bar.setMax(max);
         bar.setPadding(
                 bar.getPaddingLeft(),
                 InstagramPreferenceStyle.dp(context, 8),
                 bar.getPaddingRight(),
                 0
         );
-        bar.setOnSeekBarChangeListener(listener);
+        SmoothSlider slider = new SmoothSlider(bar, steps, listener);
         row.addView(bar, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
         ));
-        return bar;
+        return slider;
     }
 
     private static final int KIND_WIDTH = 0;
@@ -269,7 +279,7 @@ public class FloatingNavSizePreference extends Preference {
     private static final int KIND_BOTTOM = 2;
 
     /** One slider's listener. {@code kind} tells which of the three it belongs to. */
-    private final class SizeListener implements SeekBar.OnSeekBarChangeListener {
+    private final class SizeListener extends SmoothSlider.Listener {
         private final int kind;
 
         SizeListener(int kind) {
@@ -277,25 +287,24 @@ public class FloatingNavSizePreference extends Preference {
         }
 
         @Override
-        public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
-            if (!fromUser) return;
-            // The preview and the numbers follow the finger on every step.
-            takeProgress(kind, progress);
-            // A keyboard or accessibility step moves the slider without a touch, so it never reaches
-            // onStopTrackingTouch and has to be written here.
-            if (!dragging) save();
-        }
-
-        @Override
-        public void onStartTrackingTouch(SeekBar bar) {
+        void onStart() {
             dragging = true;
         }
 
         @Override
-        public void onStopTrackingTouch(SeekBar bar) {
+        void onStep(int step, boolean touching) {
+            // The preview and the numbers follow the finger on every step.
+            takeProgress(kind, step);
+            // A keyboard or accessibility step moves the slider without a touch, so it never reaches
+            // onSettle and has to be written here.
+            if (!touching) save();
+        }
+
+        @Override
+        void onSettle(int step) {
             // A drag writes once it settles, rather than on every notch it passes.
             dragging = false;
-            takeProgress(kind, bar.getProgress());
+            takeProgress(kind, step);
             save();
         }
     }
@@ -326,16 +335,19 @@ public class FloatingNavSizePreference extends Preference {
         sideDp = FloatingNavSize.SIDE_DEFAULT_DP;
         gapDp = FloatingNavSize.GAP_DEFAULT_DP;
         bottomDp = FloatingNavSize.BOTTOM_DEFAULT_DP;
-        syncSliders();
+        syncSliders(true);
         showValues();
         save();
     }
 
-    /** Puts the sliders where the current values are (this does not count as the user moving them). */
-    private void syncSliders() {
-        if (widthBar != null) widthBar.setProgress(FloatingNavSize.SIDE_MAX_DP - sideDp);
-        if (heightBar != null) heightBar.setProgress(FloatingNavSize.GAP_MAX_DP - gapDp);
-        if (bottomBar != null) bottomBar.setProgress(bottomDp - FloatingNavSize.BOTTOM_MIN_DP);
+    /**
+     * Puts the sliders where the current values are (this does not count as the user moving them). {@code animate}
+     * lets the thumbs glide there, as after "Reset".
+     */
+    private void syncSliders(boolean animate) {
+        if (widthSlider != null) widthSlider.set(FloatingNavSize.SIDE_MAX_DP - sideDp, animate);
+        if (heightSlider != null) heightSlider.set(FloatingNavSize.GAP_MAX_DP - gapDp, animate);
+        if (bottomSlider != null) bottomSlider.set(bottomDp - FloatingNavSize.BOTTOM_MIN_DP, animate);
     }
 
     /** Shows the numbers next to the sliders and redraws the preview. */
@@ -374,7 +386,7 @@ public class FloatingNavSizePreference extends Preference {
             sideDp = Pref.floatingNavSideDp();
             gapDp = Pref.floatingNavGapDp();
             bottomDp = Pref.floatingNavBottomDp();
-            syncSliders();
+            syncSliders(false);
         }
 
         if (titleView != null) {
