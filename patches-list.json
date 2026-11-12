@@ -354,6 +354,35 @@
       "options": []
     },
     {
+      "name": "Disable Meta AI components",
+      "description": "Disables Meta AI components in the manifest and turns Meta AI off everywhere in the app.",
+      "default": false,
+      "category": null,
+      "compatiblePackages": [
+        {
+          "packageName": "com.instagram.android",
+          "name": "Instagram",
+          "description": null,
+          "apkFileType": "APKM",
+          "appIconColor": "#FC483C",
+          "signatures": null,
+          "formFactor": "MOBILE",
+          "targets": [
+            {
+              "version": "452.1.0.53.64",
+              "versionCodes": {
+                "ARM64_V8A": 385811006
+              },
+              "isExperimental": false,
+              "minSdk": null,
+              "description": null
+            }
+          ]
+        }
+      ],
+      "options": []
+    },
+    {
       "name": "Disable Reels scrolling",
       "description": "Disables the endless scrolling behavior in Instagram Reels, preventing swiping to the next Reel. Note: On a clean install, the 'Tip' animation may appear but will stop on its own after a few seconds.",
       "default": true,
