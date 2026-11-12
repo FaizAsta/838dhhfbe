@@ -1121,7 +1121,7 @@ public class ScreenBuilder {
                         () -> Pref.floatingNavBar() || Pref.nativeFloatingNav()
                 )
         );
-        // Press and hold the highlight, move it to a tab and let go: dimmed until the highlight is on.
+        // Slide the highlight sideways (or hold it), move it to a tab and let go: dimmed until the highlight is on.
         addPreference(
                 helper.availableWhen(
                         helper.switchPreference(

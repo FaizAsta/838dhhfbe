@@ -23,7 +23,9 @@ import app.morphe.extension.shared.Logger;
  *       that fills its row (match parent) gets side margins, so it keeps its place and its own look; a bar with a
  *       width of its own gets that width and is centered;</li>
  *   <li><b>height</b>: the bar's height above the system inset, as the slider shows it (in dp). Whatever padding
- *       Instagram gives the bar (the system inset under it, for instance) is kept on top of that.</li>
+ *       Instagram gives the bar (the system inset under it, for instance) is kept on top of that;</li>
+ *   <li><b>icons</b>: while the width is on the bar (so the pill fills it), the bar's left and right padding is taken
+ *       off, so the tabs share the whole pill, as on the floating navigation bar (see {@link NativeBarPadding}).</li>
  * </ul>
  * Nothing of Instagram's layout is replaced and nothing is searched for in its code: only the bar's own layout
  * parameters are changed, each remembered in {@link Memory} and put back when the setting is switched off.
@@ -51,6 +53,8 @@ public final class NativeBarSize {
     /** The bar's structure as first seen (Instagram's own layout), and after the size was applied. For the debug copy. */
     private static volatile String structureBefore;
     private static volatile String structureAfter;
+    /** What was done about the bar's side padding (see NativeBarPadding), for the same copy. */
+    private static volatile String paddingInfo;
 
     private NativeBarSize() {}
 
@@ -63,9 +67,11 @@ public final class NativeBarSize {
         if (before == null) return null;
         String after = structureAfter;
         String pill = NativeBarBlur.debugShape();
+        String padding = paddingInfo;
         return "== Instagram's own bar, before the size was applied ==\n" + before
                 + "\n\n== After the size was applied ==\n" + (after == null ? "(not checked yet)" : after)
                 + "\n\n== Where the pill is drawn ==\n" + (pill == null ? "(not drawn yet)" : pill)
+                + "\n" + (padding == null ? "side padding: (not checked yet)" : padding)
                 + "\n\n== Press and hold the highlight ==\n" + TabPillDrag.status();
     }
 
@@ -107,10 +113,12 @@ public final class NativeBarSize {
         int heightStrikes;
         /** The bar's structure was written to the log (once per bar). */
         boolean described;
+        /** The side padding that was taken off the bar, so the tabs share the whole pill. */
+        final NativeBarPadding.Memory padding = new NativeBarPadding.Memory();
 
         /** True while something of Instagram's layout is changed. */
         boolean isApplied() {
-            return widthApplied || heightApplied;
+            return widthApplied || heightApplied || padding.applied;
         }
     }
 
@@ -128,6 +136,7 @@ public final class NativeBarSize {
      */
     static void forgetFailures(Memory memory) {
         memory.widthFailed = false;
+        NativeBarPadding.forgetFailures(memory.padding);
         memory.heightFailedPx = 0;
         memory.consecutiveChanges = 0;
         memory.widthStrikes = 0;
@@ -155,6 +164,13 @@ public final class NativeBarSize {
         if (!memory.widthFailed) {
             if (applyWidth(bar, params, Math.round(sideDp * density), memory)) changed = true;
         }
+        // The pill fills the bar now: the tabs are to fill it as well, so the bar's own side padding goes. When the
+        // pill does not fill the bar (the width was given up on) Instagram's padding is given back with it.
+        if (memory.widthApplied) {
+            if (NativeBarPadding.apply(bar, memory.padding)) changed = true;
+        } else if (memory.padding.applied) {
+            if (NativeBarPadding.giveBack(bar, memory.padding)) changed = true;
+        }
 
         int contentPx = Math.round(FloatingNavSize.pillHeightDp(gapDp) * density);
         if (contentPx > memory.heightFailedPx) {
@@ -164,6 +180,7 @@ public final class NativeBarSize {
             if (giveHeightBack(bar, params, memory)) changed = true;
         }
 
+        paddingInfo = NativeBarPadding.describe(memory.padding, density);
         if (changed) {
             memory.framesSinceApply = 0;
             memory.checked = false;
@@ -174,6 +191,7 @@ public final class NativeBarSize {
                 memory.heightFailedPx = Integer.MAX_VALUE;
                 giveWidthBack(params, memory);
                 giveHeightBack(bar, params, memory);
+                NativeBarPadding.giveBack(bar, memory.padding);
                 memory.consecutiveChanges = 0;
                 Logger.printInfo(() -> "Floating navigation bar: Instagram's own bar sets its size back on every "
                         + "frame, so the width and the height of the settings are not applied to it");
@@ -217,6 +235,7 @@ public final class NativeBarSize {
             if (!memory.tabHeights.isEmpty() && giveTabsBack(bar, memory)) changed = true;
             if (changed) bar.setLayoutParams(params);
         }
+        if (NativeBarPadding.giveBack(bar, memory.padding)) changed = true;
         memory.widthApplied = false;
         memory.heightApplied = false;
         memory.checked = false;
@@ -459,6 +478,7 @@ public final class NativeBarSize {
                     memory.widthFailed = true;
                     memory.widthStrikes = 0;
                     giveWidthBack(params, memory);
+                    NativeBarPadding.giveBack(bar, memory.padding);
                     givenBack = true;
                     Logger.printInfo(() -> "Floating navigation bar: Instagram's own bar " + why
                             + "; the width of the settings is not applied to it");

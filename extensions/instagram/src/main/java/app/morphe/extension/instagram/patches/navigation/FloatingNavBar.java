@@ -150,9 +150,9 @@ public final class FloatingNavBar {
         boolean tabPill;
         /** The user's picture for the selected tab, or null for the default capsule (read with the settings). */
         Bitmap tabPillImage;
-        /** "Press and hold the highlight, move it to a tab and let go" is switched on (read with the settings). */
+        /** "Slide the highlight sideways, move it to a tab and let go" is switched on (read with the settings). */
         boolean tabPillDrag;
-        /** The activity's window, whose touches the press-and-hold drag looks at (see TabPillDrag). */
+        /** The activity's window, whose touches the drag of the highlight looks at (see TabPillDrag). */
         WeakReference<Window> window = new WeakReference<>(null);
 
         // The bottom margin of the screen container this class took to 0, and the margin Instagram had there. It is
@@ -378,7 +378,7 @@ public final class FloatingNavBar {
         // The blur behind Instagram's own bar. It only changes how the bar's background is drawn, never its layout, so
         // it does not hold the frame back.
         nativeBlur(decor, state, now);
-        // The press-and-hold drag of the highlight, for whichever bar is on screen.
+        // The drag of the highlight (slide sideways or hold), for whichever bar is on screen.
         tabPillDrag(state);
 
         if (!state.enabled || state.unsupported) {
@@ -485,7 +485,7 @@ public final class FloatingNavBar {
     }
 
     /**
-     * Lets "press and hold the highlight, move it to a tab and let go" work (see {@link TabPillDrag}): hands it the
+     * Lets "slide the highlight sideways (or hold it), move it to a tab and let go" work (see {@link TabPillDrag}): hands it the
      * bar and the highlight that is on screen, or nothing when the setting is off or there is no highlight, which
      * switches the touch handling off again. It only reads what the frame already found.
      */
@@ -836,7 +836,7 @@ public final class FloatingNavBar {
             if (highlight.update((ViewGroup) barView, on, image)) invalidateSelf();
         }
 
-        /** The highlight, for the press-and-hold drag (see TabPillDrag). */
+        /** The highlight, for the drag (see TabPillDrag). */
         SelectedTabPill.Highlight highlight() {
             return highlight;
         }

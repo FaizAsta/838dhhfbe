@@ -24,20 +24,21 @@ import java.util.WeakHashMap;
 import app.morphe.extension.shared.Logger;
 
 /**
- * Press and hold the highlight behind the selected tab ("Custom selected tab pill"), move it along the bar and let go
- * over a tab: that tab is opened. Works on both floating bars, because both draw the same
- * {@link SelectedTabPill.Highlight}.
+ * Pick up the highlight behind the selected tab ("Custom selected tab pill") by sliding it sideways (or by holding it),
+ * move it along the bar and let go over a tab: that tab is opened. Works on both floating bars, because both draw the
+ * same {@link SelectedTabPill.Highlight}.
  * <p>
  * How it works. The tabs are Instagram's own views and take the touches themselves, so the touches are looked at one
  * step before they get there: the window's callback is wrapped (a {@link Proxy} that passes every call on to the
  * real one, and looks at {@code dispatchTouchEvent} first).
  * <ul>
- *   <li>A touch that starts on the highlight and stays there for about half a second (not moving more than the touch
- *       slop) is a "press and hold". Until then the touch goes on to the tab as usual, so a tap on the selected tab
- *       still works.</li>
- *   <li>At the hold the tab is sent a cancel (so it does not click or long-press when the finger lets go), the phone
- *       gives a short buzz, and the highlight is picked up: from now on it is drawn under the finger instead of on
- *       its tab, a little bigger, and the rest of the touch is not passed on.</li>
+ *   <li>A touch that starts on the highlight is picked up as soon as the finger has moved sideways by the touch
+ *       slop (about 8 dp, the same distance that tells a tap from a swipe everywhere in Android), with no waiting.
+ *       Holding the finger still on it for about half a second picks it up too. Until then the touch goes on to the
+ *       tab as usual, so a tap on the selected tab still works. A touch that moves up or down first is left alone.</li>
+ *   <li>When it is picked up the tab is sent a cancel (so it does not click or long-press when the finger lets go),
+ *       the phone gives a short tick, and from now on the highlight is drawn under the finger instead of on its tab,
+ *       a little bigger, and the rest of the touch is not passed on.</li>
  *   <li>When the finger lets go, the tab under it gets a tap of its own (a touch down and up in its middle, sent
  *       through the bar like a real one). If that is the tab that was already selected, the highlight just slides
  *       back. Otherwise it slides to the new tab and waits there while Instagram opens it.</li>
@@ -96,6 +97,7 @@ final class TabPillDrag {
     private static volatile int touches;
     private static volatile int downsOnHighlight;
     private static volatile int holds;
+    private static volatile int slides;
     private static volatile int drops;
     private static volatile int opened;
 
@@ -112,6 +114,7 @@ final class TabPillDrag {
         return "touches looked at: " + touches
                 + "\nwindow callbacks wrapped: " + wraps
                 + "\ntouches that started on the highlight: " + downsOnHighlight
+                + "\npicked up by sliding sideways: " + slides
                 + "\nholds that picked it up: " + holds
                 + "\ndrops: " + drops + " (a tab other than the selected one: " + opened + ")"
                 + "\nlast touch down: " + lastDown
@@ -253,14 +256,24 @@ final class TabPillDrag {
                     }
                 } else if (state == PENDING) {
                     if (action == MotionEvent.ACTION_MOVE) {
-                        if (Math.abs(ev.getRawX() - downX) > slop || Math.abs(ev.getRawY() - downY) > slop) {
-                            note("moved before the hold was long enough (" + holdMs + " ms)");
+                        float dx = ev.getRawX() - downX;
+                        float dy = ev.getRawY() - downY;
+                        if (Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy)) {
+                            // Slid sideways: the highlight is picked up now, and goes where the finger is. This move is
+                            // not passed on (the tab was sent a cancel).
+                            if (pickUp(downX, ev.getRawX(), HapticFeedbackConstants.CLOCK_TICK)) {
+                                slides++;
+                                note("picked up by sliding sideways");
+                                return true;
+                            }
+                        } else if (Math.abs(dy) > slop) {
+                            note("moved up or down: left alone");
                             cancelPending();
                         } else {
                             fingerX = ev.getRawX();
                         }
                     } else {
-                        // Let go, cancelled, or a second finger: not a hold.
+                        // Let go, cancelled, or a second finger: not a drag.
                         cancelPending();
                     }
                 }
@@ -320,43 +333,56 @@ final class TabPillDrag {
         private void onHold() {
             try {
                 if (state != PENDING) return;
-                ViewGroup barView = bar.get();
-                SelectedTabPill.Highlight h = highlight.get();
-                MotionEvent down = downEvent;
-                downEvent = null;
-                state = IDLE;
-                if (barView == null || h == null || down == null) {
-                    if (down != null) down.recycle();
-                    return;
+                if (pickUp(fingerX, fingerX, HapticFeedbackConstants.LONG_PRESS)) {
+                    holds++;
+                    note("picked up by holding");
                 }
-                barView.getLocationOnScreen(location);
-                if (!h.beginDrag(barView, fingerX - location[0])) {
-                    note("held, but the highlight could not be picked up (" + h.describeShown() + ")");
-                    down.recycle();
-                    return;
-                }
-                holds++;
-                note("picked up the highlight");
-                state = DRAGGING;
-                // The tab under the finger was told that a touch started: tell it (and everything above it) that the
-                // touch is over, so it does not click or long-press when the finger lets go.
-                MotionEvent cancel = MotionEvent.obtain(down);
-                cancel.setAction(MotionEvent.ACTION_CANCEL);
-                busy = true;
-                try {
-                    if (original != null) original.dispatchTouchEvent(cancel);
-                } finally {
-                    busy = false;
-                    cancel.recycle();
-                    down.recycle();
-                }
-                barView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-                barView.invalidate();
             } catch (Throwable t) {
                 Logger.printException(() -> "TabPillDrag.onHold failed", t);
                 note("onHold failed: " + t);
                 reset();
             }
+        }
+
+        /**
+         * Picks the highlight up. The finger took hold at {@code grabRawX} (the highlight is held there, so it does not
+         * jump) and is at {@code fingerRawX} now (screen px). False when it could not be picked up, and the touch goes on
+         * to the app as it was.
+         */
+        private boolean pickUp(float grabRawX, float fingerRawX, int haptic) {
+            handler.removeCallbacks(holdTimer);
+            ViewGroup barView = bar.get();
+            SelectedTabPill.Highlight h = highlight.get();
+            MotionEvent down = downEvent;
+            downEvent = null;
+            state = IDLE;
+            if (barView == null || h == null || down == null) {
+                if (down != null) down.recycle();
+                return false;
+            }
+            barView.getLocationOnScreen(location);
+            if (!h.beginDrag(barView, grabRawX - location[0])) {
+                note("the highlight could not be picked up (" + h.describeShown() + ")");
+                down.recycle();
+                return false;
+            }
+            h.dragTo(barView, fingerRawX - location[0]);
+            state = DRAGGING;
+            // The tab under the finger was told that a touch started: tell it (and everything above it) that the touch
+            // is over, so it does not click or long-press when the finger lets go.
+            MotionEvent cancel = MotionEvent.obtain(down);
+            cancel.setAction(MotionEvent.ACTION_CANCEL);
+            busy = true;
+            try {
+                if (original != null) original.dispatchTouchEvent(cancel);
+            } finally {
+                busy = false;
+                cancel.recycle();
+                down.recycle();
+            }
+            barView.performHapticFeedback(haptic);
+            barView.invalidate();
+            return true;
         }
 
         /** The rest of a touch that is dragging the highlight: followed here, not passed on. */

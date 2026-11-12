@@ -135,7 +135,7 @@ public class Settings {
     // bar. Applies as soon as you go back to the app (no restart). While it is on, Instagram's own selected tab pill
     // is kept off as well (see HookFlags). See SelectedTabPill.
     public static final BooleanSetting CUSTOM_TAB_PILL = new BooleanSetting("custom_tab_pill", false, NOT_REQUIRED);
-    // Press and hold the custom selected tab pill, move it to another tab and let go to open that tab. On by default,
+    // Slide the custom selected tab pill sideways (or hold it), move it to another tab and let go to open that tab. On by default,
     // and it only does anything while "Custom selected tab pill" is on. Applies as soon as you go back to the app.
     // See TabPillDrag.
     public static final BooleanSetting CUSTOM_TAB_PILL_DRAG = new BooleanSetting("custom_tab_pill_drag", true, NOT_REQUIRED);
