@@ -210,9 +210,9 @@ public final class FloatingNavBar {
         /** How strong the blur is and how see-through the glass is, 0 to 100 (read with the other settings). */
         int nativeBlurLevel = 50;
         int nativeTransparency = 50;
-        /** "Liquid glass" is switched on, and how strongly the rim bends the page, 0 to 100 (read with the others). */
+        /** "Liquid glass" is switched on, and every number of its look (read with the others). */
         boolean nativeLiquid;
-        int nativeRefraction = 60;
+        LiquidGlassLook nativeLook = LiquidGlassLook.DEFAULT;
         /** The blur that is on Instagram's own bar, and what could not be done (see NativeBarBlur). */
         NativeBarBlur.Memory nativeBlur = new NativeBarBlur.Memory();
     }
@@ -374,7 +374,7 @@ public final class FloatingNavBar {
             state.nativeBlurLevel = Pref.nativeFloatingNavBlurLevel();
             state.nativeTransparency = Pref.nativeFloatingNavTransparency();
             state.nativeLiquid = Pref.nativeFloatingNavLiquid();
-            state.nativeRefraction = Pref.nativeFloatingNavRefraction();
+            state.nativeLook = state.nativeLiquid ? LiquidGlassLook.read() : LiquidGlassLook.DEFAULT;
             boolean nativeBlurSetting = Pref.nativeFloatingNavBlur();
             if (nativeBlurSetting != state.nativeBlurSetting) {
                 state.nativeBlurSetting = nativeBlurSetting;
@@ -513,7 +513,7 @@ public final class FloatingNavBar {
         // The slider's height, the same one the bar's own height is made from (see NativeBarSize).
         int pillHeightPx = Math.round(FloatingNavSize.pillHeightDp(state.gapDp) * density);
         NativeBarBlur.apply(bar, memory, state.nativeBlurSetting, state.nativeBlurLevel, state.nativeTransparency,
-                state.nativeLiquid, state.nativeRefraction, NativeBarSize.widthApplied(state.nativeSize), pillHeightPx, state.tabPill, state.tabPillImage);
+                state.nativeLiquid, state.nativeLook, NativeBarSize.widthApplied(state.nativeSize), pillHeightPx, state.tabPill, state.tabPillImage);
     }
 
     /**

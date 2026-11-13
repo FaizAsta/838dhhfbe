@@ -487,6 +487,20 @@ public class Pref {
         return percent(SharedPref.getStringPref(Settings.NATIVE_FLOATING_NAV_REFRACTION), 60);
     }
 
+    /** One of the liquid glass sliders (see LiquidGlassLook), a whole percent. */
+    public static int liquidPercent(app.morphe.extension.instagram.settings.StringSetting setting, int fallback) {
+        return percent(SharedPref.getStringPref(setting), fallback);
+    }
+
+    public static boolean setLiquidPercent(app.morphe.extension.instagram.settings.StringSetting setting, int percent) {
+        return SharedPref.setStringPref(setting.key, String.valueOf(Math.max(0, Math.min(100, percent))));
+    }
+
+    /** Bevel mode: the liquid glass is a dome (a magnifier) instead of the biconvex pill. */
+    public static boolean nativeFloatingNavDome() {
+        return SharedPref.getBooleanPref(Settings.NATIVE_FLOATING_NAV_DOME);
+    }
+
     public static boolean setNativeFloatingNavRefraction(int percent) {
         return SharedPref.setStringPref(Settings.NATIVE_FLOATING_NAV_REFRACTION.key,
                 String.valueOf(Math.max(0, Math.min(100, percent))));

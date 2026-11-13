@@ -32,6 +32,11 @@ public class PercentSliderPreference extends Preference {
 
         /** The slider is moving: the value it shows right now, before it is saved (for a live preview). */
         void live(int percent);
+
+        /** The text next to the slider for this percent (the liquid glass sliders show real units). */
+        default String format(int percent) {
+            return percent + "%";
+        }
     }
 
     private final Access access;
@@ -133,7 +138,7 @@ public class PercentSliderPreference extends Preference {
     }
 
     private void showValue(int percent) {
-        if (valueView != null) valueView.setText(percent + "%");
+        if (valueView != null) valueView.setText(access.format(percent));
     }
 
     @Override

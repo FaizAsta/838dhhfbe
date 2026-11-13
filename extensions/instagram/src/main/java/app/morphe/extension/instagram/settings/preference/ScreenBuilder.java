@@ -1240,17 +1240,45 @@ public class ScreenBuilder {
                         () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur()
                 )
         );
+        // The rest of the liquid glass playground, one slider each (see LiquidGlassLook): dimmed until the switch above
+        // is on.
+        for (final app.morphe.extension.instagram.patches.navigation.LiquidGlassLook.Option option
+                : app.morphe.extension.instagram.patches.navigation.LiquidGlassLook.OPTIONS) {
+            addPreference(
+                    helper.availableWhen(
+                            helper.percentSliderPreference(
+                                    option.titleKey,
+                                    str(option.titleKey),
+                                    "",
+                                    new PercentSliderPreference.Access() {
+                                        @Override public int get() { return option.get(); }
+                                        @Override public void set(int percent) { option.set(percent); }
+                                        @Override public void live(int percent) { }
+                                        @Override public String format(int percent) { return option.format.show(percent); }
+                                    }
+                            ),
+                            () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur() && Pref.nativeFloatingNavLiquid()
+                    )
+            );
+        }
+        // Bevel mode: the pill (the rim bends the page) or a dome (a magnifier with a flat back).
         addPreference(
                 helper.availableWhen(
-                        helper.percentSliderPreference(
-                                "piko_native_floating_nav_refraction",
-                                str("piko_native_floating_nav_refraction"),
+                        helper.switchPreference(
+                                str("piko_native_floating_nav_dome"),
                                 "",
-                                new PercentSliderPreference.Access() {
-                                    @Override public int get() { return Pref.nativeFloatingNavRefraction(); }
-                                    @Override public void set(int percent) { Pref.setNativeFloatingNavRefraction(percent); }
-                                    @Override public void live(int percent) { }
-                                }
+                                Settings.NATIVE_FLOATING_NAV_DOME
+                        ),
+                        () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur() && Pref.nativeFloatingNavLiquid()
+                )
+        );
+        // Puts every liquid glass slider (and the bevel mode) back to its default.
+        addPreference(
+                helper.availableWhen(
+                        helper.buttonPreference(
+                                str("piko_liquid_glass_reset"),
+                                "",
+                                "piko_liquid_glass_reset"
                         ),
                         () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur() && Pref.nativeFloatingNavLiquid()
                 )

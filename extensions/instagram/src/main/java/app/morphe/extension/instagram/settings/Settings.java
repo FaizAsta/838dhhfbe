@@ -176,6 +176,35 @@ public class Settings {
     // the liquid glass switch.
     public static final StringSetting NATIVE_FLOATING_NAV_REFRACTION =
             new StringSetting("native_floating_nav_refraction", "60", NOT_REQUIRED);
+    // The rest of the liquid glass playground (see LiquidGlassLook), each a whole percent chosen with a slider under
+    // the refraction slider. Saturation and brightness are centred (50 = no change). Apply as soon as you go back to
+    // the app (no restart).
+    public static final StringSetting NATIVE_FLOATING_NAV_CHROMA =
+            new StringSetting("native_floating_nav_chroma", "20", NOT_REQUIRED);
+    public static final StringSetting NATIVE_FLOATING_NAV_EDGE_HIGHLIGHT =
+            new StringSetting("native_floating_nav_edge_highlight", "20", NOT_REQUIRED);
+    public static final StringSetting NATIVE_FLOATING_NAV_SPECULAR =
+            new StringSetting("native_floating_nav_specular", "30", NOT_REQUIRED);
+    public static final StringSetting NATIVE_FLOATING_NAV_FRESNEL =
+            new StringSetting("native_floating_nav_fresnel", "50", NOT_REQUIRED);
+    public static final StringSetting NATIVE_FLOATING_NAV_DISTORTION =
+            new StringSetting("native_floating_nav_distortion", "0", NOT_REQUIRED);
+    public static final StringSetting NATIVE_FLOATING_NAV_CORNER_RADIUS =
+            new StringSetting("native_floating_nav_corner_radius", "100", NOT_REQUIRED);
+    public static final StringSetting NATIVE_FLOATING_NAV_Z_RADIUS =
+            new StringSetting("native_floating_nav_z_radius", "80", NOT_REQUIRED);
+    public static final StringSetting NATIVE_FLOATING_NAV_OPACITY =
+            new StringSetting("native_floating_nav_opacity", "100", NOT_REQUIRED);
+    public static final StringSetting NATIVE_FLOATING_NAV_SATURATION =
+            new StringSetting("native_floating_nav_saturation", "50", NOT_REQUIRED);
+    public static final StringSetting NATIVE_FLOATING_NAV_BRIGHTNESS =
+            new StringSetting("native_floating_nav_brightness", "50", NOT_REQUIRED);
+    public static final StringSetting NATIVE_FLOATING_NAV_SHADOW_OPACITY =
+            new StringSetting("native_floating_nav_shadow_opacity", "0", NOT_REQUIRED);
+    public static final StringSetting NATIVE_FLOATING_NAV_SHADOW_SPREAD =
+            new StringSetting("native_floating_nav_shadow_spread", "35", NOT_REQUIRED);
+    // Bevel mode of the playground: off = biconvex pill (the rim bends the page), on = dome (a magnifier with a flat back).
+    public static final BooleanSetting NATIVE_FLOATING_NAV_DOME = new BooleanSetting("native_floating_nav_dome", false, NOT_REQUIRED);
     // Hides the system's gesture line (the thin handle at the bottom of the screen) while a floating bar is on, by
     // hiding the system navigation bar of the app's main screen. Off by default: a swipe up from the bottom edge then
     // needs two swipes to go Home. Applies as soon as you go back to the app (no restart). See GestureLineHider.

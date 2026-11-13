@@ -150,9 +150,10 @@ final class NativeBarBlur {
      *       fitted place;</li>
      *   <li>{@code blurPercent} (0 to 100) is how strong the blur is (0 = the page behind shows sharp) and
      *       {@code transparencyPercent} (0 to 100) how see-through the glass is (0 = a solid tint, 100 = no tint);</li>
-     *   <li>{@code liquid} and {@code refractionPercent} (0 to 100): the liquid glass look on top of the blur, the rim
-     *       of the pill bends what is behind it (see {@link LiquidGlassEffect}). Needs Android 13; below that the
-     *       plain blur is drawn;</li>
+     *   <li>{@code liquid} and {@code look}: the liquid glass look on top of the blur, the rim of the pill bends
+     *       what is behind it (see {@link LiquidGlassEffect}), with every number of the playground (see
+     *       {@link LiquidGlassLook}). The shader needs Android 13; below that the plain blur is drawn, but the corner
+     *       radius, the opacity and the shadow of the look still apply;</li>
      *   <li>{@code fillWidth}: the width of the slider was given to the bar (see {@link NativeBarSize}), so the pill is
      *       as wide as the bar. False keeps the width of Instagram's own pill;</li>
      *   <li>{@code pillHeightPx}: the pill's height in px (the slider's), centered on the tabs. 0 keeps the height
@@ -163,7 +164,7 @@ final class NativeBarBlur {
      * </ul>
      */
     static void apply(View bar, Memory memory, boolean glass, int blurPercent, int transparencyPercent,
-                      boolean liquid, int refractionPercent,
+                      boolean liquid, LiquidGlassLook look,
                       boolean fillWidth, int pillHeightPx, boolean tabPill, Bitmap tabPillImage) {
         if (!supported()) {
             if (!memory.olderAndroidLogged) {
@@ -212,7 +213,7 @@ final class NativeBarBlur {
         boolean night = (bar.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
                 == Configuration.UI_MODE_NIGHT_YES;
         backdrop.update(bar, bar.getPaddingBottom(), night, glass, blurPercent, transparencyPercent, liquid,
-                refractionPercent, fillWidth, pillHeightPx);
+                look, fillWidth, pillHeightPx);
         // The highlight behind the selected tab. The tab is looked at in every frame (a tab changing its selected
         // state does not redraw the bar's background by itself); the bar is drawn again only when it changed.
         backdrop.updateTabPill(bar, tabPill, tabPillImage);
@@ -322,12 +323,13 @@ final class NativeBarBlur {
         private int transparencyPercent = 50;
         /** The liquid glass look (the rim bends the page) is wanted, and how strongly (0 to 100). */
         private boolean liquid;
-        private int refractionPercent = 60;
+        private LiquidGlassLook look = LiquidGlassLook.DEFAULT;
+        private final Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         /** The shader could not be built on this phone: the plain blur is drawn instead (until switched off and on). */
         private boolean liquidFailed;
         // What the render effect of the node was made from, so it is made again only when one of these changes.
         private boolean effectLiquid;
-        private int effectRefraction = -1;
+        private LiquidGlassLook effectLook;
         private float effectWidth = -1f;
         private float effectHeight = -1f;
         private float effectRadius = -1f;
@@ -387,22 +389,22 @@ final class NativeBarBlur {
 
         /** Takes the bar, the page and the shade (from what Instagram's background has under it). */
         void update(View barView, int bottomInset, boolean night, boolean glass, int blurPercent,
-                    int transparencyPercent, boolean liquid, int refractionPercent, boolean fillWidth,
+                    int transparencyPercent, boolean liquid, LiquidGlassLook look, boolean fillWidth,
                     int pillHeightPx) {
             // Runs before every frame: a new reference is made only when the view changed.
             if (bar.get() != barView) bar = new WeakReference<>(barView);
             blurPercent = Math.max(0, Math.min(100, blurPercent));
             transparencyPercent = Math.max(0, Math.min(100, transparencyPercent));
-            refractionPercent = Math.max(0, Math.min(100, refractionPercent));
+            if (look == null) look = LiquidGlassLook.DEFAULT;
             pillHeightPx = Math.max(0, pillHeightPx);
             // Switched off and on again: a shader that could not be built gets another try.
             if (!liquid) liquidFailed = false;
             boolean moved = this.bottomInset != bottomInset || this.night != night
                     || this.blurPercent != blurPercent || this.transparencyPercent != transparencyPercent
                     || this.glass != glass || this.fillWidth != fillWidth || this.pillHeightPx != pillHeightPx
-                    || this.liquid != liquid || this.refractionPercent != refractionPercent;
+                    || this.liquid != liquid || !this.look.equals(look);
             this.liquid = liquid;
-            this.refractionPercent = refractionPercent;
+            this.look = look;
             this.bottomInset = bottomInset;
             this.night = night;
             this.glass = glass;
@@ -558,6 +560,8 @@ final class NativeBarBlur {
                 float own = ((GradientDrawable) base).getCornerRadius();
                 if (own > 0f && own < pill) radius = own;
             }
+            // Liquid glass: the corner radius slider (100 % is a full pill, 0 % is square).
+            if (glass && liquid) radius = pill * look.cornerPart();
             return true;
         }
 
@@ -605,6 +609,18 @@ final class NativeBarBlur {
                 return;
             }
 
+            // Liquid glass: the opacity fades the whole glass (and its shadow), so they are drawn into one layer.
+            int layer = -1;
+            if (liquid) {
+                float spread = look.shadowSpreadPx(density);
+                if (look.opacity < 100) {
+                    float m = spread * 1.5f + 2f * density;
+                    layer = canvas.saveLayerAlpha(rect.left - m, rect.top - m, rect.right + m, rect.bottom + m,
+                            Math.round(255f * look.opacityPart()));
+                }
+                drawShadow(canvas, spread);
+            }
+
             if (!blurFailed && !drawing && canvas.isHardwareAccelerated()) {
                 View barView = bar.get();
                 if (barView != null && barView.isAttachedToWindow()) {
@@ -627,7 +643,27 @@ final class NativeBarBlur {
             float half = edge.getStrokeWidth() / 2f;
             ring.set(rect.left + half, rect.top + half, rect.right - half, rect.bottom - half);
             canvas.drawRoundRect(ring, Math.max(0f, radius - half), Math.max(0f, radius - half), edge);
+            if (layer >= 0) canvas.restoreToCount(layer);
             drawTabPill(canvas);
+        }
+
+        /**
+         * The drop shadow of the liquid glass: a soft shadow around the pill, with the pill itself cut out so it
+         * never shows through the glass. It is only drawn inside the bar's own area, so a bar with little room around
+         * the pill cuts it off.
+         */
+        private void drawShadow(Canvas canvas, float spread) {
+            float alpha = look.shadowAlpha();
+            if (alpha <= 0f || spread < 1f) return;
+            shadowPaint.setColor(Color.BLACK);
+            shadowPaint.setShadowLayer(spread, 0f, spread * 0.3f, Color.argb(Math.round(255f * alpha), 0, 0, 0));
+            int save = canvas.save();
+            try {
+                canvas.clipOutPath(clip);
+                canvas.drawRoundRect(rect, radius, radius, shadowPaint);
+            } finally {
+                canvas.restoreToCount(save);
+            }
         }
 
         /**
@@ -697,7 +733,7 @@ final class NativeBarBlur {
             // Liquid glass needs Android 13; below that (or when the shader failed) it is the plain blur.
             boolean glassy = liquid && !liquidFailed && LiquidGlassEffect.supported();
             // The bent rim looks outside the pill, so the recorded area has that much more room all around.
-            float reach = glassy ? LiquidGlassEffect.reachPx(rect.height(), density, refractionPercent) + 2f : 0f;
+            float reach = glassy ? LiquidGlassEffect.reachPx(rect.height(), density, look) : 0f;
             int pad = (int) Math.ceil(blurPx * 2f + reach);
             int width = (int) Math.ceil(rect.width()) + 2 * pad;
             int height = (int) Math.ceil(rect.height()) + 2 * pad;
@@ -715,12 +751,12 @@ final class NativeBarBlur {
                 nodeRadiusPx = -1f;
             }
             record.setPosition(0, 0, width, height);
-            if (nodeRadiusPx != blurPx || effectLiquid != glassy || effectRefraction != refractionPercent
+            if (nodeRadiusPx != blurPx || effectLiquid != glassy || !look.equals(effectLook)
                     || effectWidth != rect.width() || effectHeight != rect.height() || effectRadius != radius
                     || effectPad != pad) {
                 nodeRadiusPx = blurPx;
                 effectLiquid = glassy;
-                effectRefraction = refractionPercent;
+                effectLook = look;
                 effectWidth = rect.width();
                 effectHeight = rect.height();
                 effectRadius = radius;
@@ -733,7 +769,7 @@ final class NativeBarBlur {
                 if (glassy) {
                     try {
                         effect = LiquidGlassEffect.create(blur, rect.width(), rect.height(), pad, radius, density,
-                                refractionPercent);
+                                look);
                     } catch (Throwable t) {
                         // The shader was refused: the plain blur is used from now on.
                         liquidFailed = true;

@@ -17,7 +17,9 @@ import java.lang.ref.WeakReference;
 
 import app.morphe.extension.shared.Utils;
 import app.morphe.extension.shared.Logger;
+import app.morphe.extension.crimera.sharedPreference.SharedPref;
 import app.morphe.extension.instagram.settings.ActivityHook;
+import app.morphe.extension.instagram.settings.Settings;
 import app.morphe.extension.instagram.constants.Constants;
 import app.morphe.extension.instagram.settings.preference.fragments.FragmentHook;
 import app.morphe.extension.instagram.patches.Block;
@@ -79,6 +81,9 @@ public class ButtonPref extends Preference {
                                 ? "piko_tab_pill_reset_image_done"
                                 : "piko_tab_pill_reset_image_none"));
                         FloatingNavSizePreference.refreshPreview();
+
+                    } else if (key.equals("piko_liquid_glass_reset")) {
+                        resetLiquidGlass();
 
                     } else if (key.equals("piko_reset_pref")) {
                         InstaUtils.showResetSettingsDialog(context);
@@ -208,6 +213,7 @@ public class ButtonPref extends Preference {
                 || key.equals("piko_export_pref")
                 || key.equals("piko_import_pref")
                 || key.equals("piko_reset_pref")
+                || key.equals("piko_liquid_glass_reset")
                 || key.equals("piko_focus_lock_action")
                 || key.equals("piko_download_set_path")
                 || key.equals("piko_delete_analytics_cache")
@@ -221,6 +227,25 @@ public class ButtonPref extends Preference {
                 || key.equals("piko_pref_add_font")
                 || key.equals("piko_pref_delete_font")
                 || key.equals("view_deleted_messages")));
+    }
+
+    /**
+     * Puts every liquid glass slider and the bevel mode back to their defaults. The settings screen is then made
+     * again, so every row (the sliders and the bevel switch) shows the value it really has.
+     */
+    private void resetLiquidGlass() {
+        for (app.morphe.extension.instagram.patches.navigation.LiquidGlassLook.Option option
+                : app.morphe.extension.instagram.patches.navigation.LiquidGlassLook.OPTIONS) {
+            option.set(option.def);
+        }
+        SharedPref.setBooleanPref(Settings.NATIVE_FLOATING_NAV_DOME.key,
+                Settings.NATIVE_FLOATING_NAV_DOME.defaultValue);
+        Utils.showToastShort(str("piko_liquid_glass_reset_done"));
+        try {
+            if (context instanceof Activity) ((Activity) context).recreate();
+        } catch (Throwable t) {
+            Logger.printException(() -> "ButtonPref: the settings screen could not be redrawn", t);
+        }
     }
 
     private static boolean hasPressedHighlight(String key) {
