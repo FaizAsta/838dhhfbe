@@ -359,6 +359,9 @@
     <string name="piko_hide_gesture_line_desc">Hides the thin white line at the very bottom of the screen while a floating bar is on. That line is Android\'s own gesture handle, not part of Instagram, so the only way to remove it is to hide the system navigation bar. The floating bar stays where it is. The catch: a swipe up from the bottom edge then shows the line for a moment first, and only the next swipe goes Home. Applies as soon as you go back to the app.</string>
     <string name="piko_remove_selected_tab_pill">Remove selected tab pill</string>
     <string name="piko_remove_selected_tab_pill_desc">Removes the rounded highlight behind the selected tab of the bottom bar, so only the icon shows which tab is open. Works with the stock bar and the floating bar. Restart the app after changing it.</string>
+    <string name="piko_nav_tab_default">Default</string>
+    <string name="piko_nav_tab_blur">Blur</string>
+    <string name="piko_nav_tab_liquid">Liquid glass</string>
     <string name="piko_navigation_tabs_title">Show and reorder tabs</string>
     <string name="piko_navigation_tabs_summary">Choose visible bottom tabs and drag to reorder them</string>
     <string name="piko_navigation_startup_tab">App startup tab</string>

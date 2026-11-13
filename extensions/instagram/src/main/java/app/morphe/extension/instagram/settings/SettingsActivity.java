@@ -47,6 +47,7 @@ import app.morphe.extension.instagram.patches.devFlags.RecommendedFlags;
 import app.morphe.extension.instagram.settings.preference.Helper;
 import app.morphe.extension.instagram.settings.preference.ScreenBuilder;
 import app.morphe.extension.instagram.settings.preference.widgets.DashboardStyle;
+import app.morphe.extension.instagram.settings.preference.widgets.FloatingNavSizePreference;
 import app.morphe.extension.instagram.settings.preference.widgets.InstagramPreferenceStyle;
 import app.morphe.extension.instagram.settings.preference.widgets.InstagramSearchStyle;
 import app.morphe.extension.instagram.settings.preference.widgets.SearchResultPreference;
@@ -688,6 +689,26 @@ public final class SettingsActivity {
         public LinearLayout getCustomContainer() {
             return customContainer;
         }
+
+        /**
+         * Puts {@code view} in the strip between the toolbar and the list. The list scrolls under it, so the view
+         * stays where it is (the preview of the Navigation bar settings).
+         */
+        void pinHeader(View view) {
+            if (customContainer == null || view == null) return;
+            customContainer.removeAllViews();
+            customContainer.addView(view, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+            ));
+        }
+
+        /** Takes {@code view} out of the strip again (the page it belonged to is going away). */
+        void unpinHeader(View view) {
+            if (customContainer != null && view != null && view.getParent() == customContainer) {
+                customContainer.removeView(view);
+            }
+        }
     }
 
     public static class SettingsFragment extends PreferenceFragment {
@@ -698,6 +719,8 @@ public final class SettingsActivity {
         private String fragmentName = Constants.PIKO_FRAGMENT_SETTINGS;
         private String targetPreferenceKey;
         private ListView listView;
+        /** The preview pinned above the list on the Navigation bar page (null on every other page). */
+        private View pinnedPreview;
         private View searchEntryView;
         private boolean searchEntryAdded;
         private View dashboardHero;
@@ -761,6 +784,11 @@ public final class SettingsActivity {
 
         @Override
         public void onDestroyView() {
+            if (pinnedPreview != null) {
+                Controller controller = getController(getActivity());
+                if (controller != null) controller.unpinHeader(pinnedPreview);
+                pinnedPreview = null;
+            }
             listView = null;
             searchEntryView = null;
             searchEntryAdded = false;
@@ -822,6 +850,12 @@ public final class SettingsActivity {
 
             Activity activity = getActivity();
             Controller controller = getController(activity);
+            // The preview of the Navigation bar settings stays above the list, whatever page of them is open and
+            // however far the list is scrolled.
+            if (Constants.PIKO_FRAGMENT_NAV_BTNS.equals(fragmentName) && controller != null) {
+                pinnedPreview = FloatingNavSizePreference.createPinnedPreview(context);
+                controller.pinHeader(pinnedPreview);
+            }
             if (isRootFragment() && controller != null) {
                 controller.onRootFragmentReady(
                         this,
@@ -842,6 +876,7 @@ public final class SettingsActivity {
             helper = new Helper(context);
             new ScreenBuilder(context, screen, helper)
                     .dashboard(fragmentName == null || Constants.PIKO_FRAGMENT_SETTINGS.equals(fragmentName))
+                    .targetPreference(targetPreferenceKey)
                     .buildFragment(fragmentName);
             helper.updateDependencies(screen);
             return screen;

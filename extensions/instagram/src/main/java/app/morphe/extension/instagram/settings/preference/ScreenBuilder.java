@@ -46,6 +46,10 @@ public class ScreenBuilder {
     private final Helper helper;
     private final List<DashboardRowPref.Tile> pendingTiles = new ArrayList<>();
     private boolean dashboardLayout;
+    /** True while the search index is built: pages that hide rows behind buttons must then show every row. */
+    private boolean searchIndexing;
+    /** The row a search result leads to, so a page with buttons can open on the button that holds it. */
+    private String targetPreferenceKey;
 
     public ScreenBuilder(Context context, PreferenceScreen screen, Helper helper) {
         this.context = context;
@@ -56,6 +60,12 @@ public class ScreenBuilder {
     /** Shows the root page as a dashboard of tiles. Leave off for search indexing. */
     public ScreenBuilder dashboard(boolean enabled) {
         this.dashboardLayout = enabled;
+        return this;
+    }
+
+    /** The key of the row the person is going to (from a search result), or null. */
+    public ScreenBuilder targetPreference(String preferenceKey) {
+        this.targetPreferenceKey = preferenceKey;
         return this;
     }
 
@@ -100,6 +110,7 @@ public class ScreenBuilder {
     }
 
     public void buildFragmentForSearch(String fragmentName) {
+        searchIndexing = true;
         if (Constants.PIKO_FRAGMENT_REC_FLAGS.equals(fragmentName)) {
             buildRecommendedFlagsSection(false);
         } else {
@@ -1104,8 +1115,55 @@ public class ScreenBuilder {
         }
     }
 
+    /** The three pages of the Navigation bar settings, in the order of the buttons at the top of the page. */
+    private static final int NAV_TAB_DEFAULT = 0;
+    private static final int NAV_TAB_BLUR = 1;
+    private static final int NAV_TAB_LIQUID = 2;
+    private static final int NAV_TAB_COUNT = 3;
+
+    /**
+     * The page of the Navigation bar settings that is open. Kept while the app runs, so the page opens on the
+     * button it was left on (handy when going back and forth to the app to look at a slider).
+     */
+    private static int navTab = NAV_TAB_DEFAULT;
+
+    /** The rows of each page. Only the rows of the selected page are on the screen at a time. */
+    private List<List<Preference>> navTabs;
+    /** The page whose rows are on the screen now. */
+    private int navTabShown = NAV_TAB_DEFAULT;
+
+    private void addToNavTab(int tab, Preference preference) {
+        navTabs.get(tab).add(preference);
+    }
+
+    /** Swaps the rows on the screen for the rows of {@code tab}. The buttons row stays where it is. */
+    private void showNavTab(int tab) {
+        for (Preference preference : navTabs.get(navTabShown)) {
+            screen.removePreference(preference);
+        }
+        List<Preference> rows = navTabs.get(tab);
+        for (int i = 0; i < rows.size(); i++) {
+            Preference preference = rows.get(i);
+            // The buttons row is 0, the rows under it follow in the order they were built in.
+            preference.setOrder(i + 1);
+            screen.addPreference(preference);
+        }
+        navTabShown = tab;
+        // A row that was off the screen did not hear about switches turned on or off meanwhile.
+        helper.updateDependencies(screen);
+    }
+
     public void buildNavigationSection() {
-        addPreference(
+        navTabs = new ArrayList<>();
+        for (int i = 0; i < NAV_TAB_COUNT; i++) {
+            navTabs.add(new ArrayList<Preference>());
+        }
+
+        // ---------------------------------------------------------------------------------------------------
+        // Default: the floating navigation bar, Instagram's own floating bar (the switch only), the selected tab
+        // pill, the gesture line and the tabs of the bar.
+        // ---------------------------------------------------------------------------------------------------
+        addToNavTab(NAV_TAB_DEFAULT,
                 helper.switchPreference(
                         str("piko_floating_nav_bar"),
                         "",
@@ -1116,7 +1174,7 @@ public class ScreenBuilder {
         // Width and height of the floating bar with a live preview: of the pill, and of Instagram's own floating bar
         // (the switch below), which takes the same two sliders. Only usable while one of the two is on: it is dimmed
         // otherwise, and comes back as soon as one of the switches is turned on.
-        addPreference(
+        addToNavTab(NAV_TAB_DEFAULT,
                 helper.availableWhen(
                         helper.floatingNavSizePreference(
                                 str("piko_floating_nav_size"),
@@ -1130,7 +1188,7 @@ public class ScreenBuilder {
         // of the selected tab, so it follows the width and height sliders above, and the preview shows it. It works on
         // the floating navigation bar and on Instagram's own floating bar, so these are dimmed while neither is on;
         // the two buttons are dimmed until the switch is on.
-        addPreference(
+        addToNavTab(NAV_TAB_DEFAULT,
                 helper.availableWhen(
                         helper.switchPreference(
                                 str("piko_custom_tab_pill"),
@@ -1141,7 +1199,7 @@ public class ScreenBuilder {
                 )
         );
         // Slide the highlight sideways (or hold it), move it to a tab and let go: dimmed until the highlight is on.
-        addPreference(
+        addToNavTab(NAV_TAB_DEFAULT,
                 helper.availableWhen(
                         helper.switchPreference(
                                 str("piko_custom_tab_pill_drag"),
@@ -1151,7 +1209,7 @@ public class ScreenBuilder {
                         () -> (Pref.floatingNavBar() || Pref.nativeFloatingNav()) && Pref.customTabPill()
                 )
         );
-        addPreference(
+        addToNavTab(NAV_TAB_DEFAULT,
                 helper.availableWhen(
                         helper.buttonPreference(
                                 str("piko_tab_pill_pick_image"),
@@ -1161,7 +1219,7 @@ public class ScreenBuilder {
                         () -> (Pref.floatingNavBar() || Pref.nativeFloatingNav()) && Pref.customTabPill()
                 )
         );
-        addPreference(
+        addToNavTab(NAV_TAB_DEFAULT,
                 helper.availableWhen(
                         helper.buttonPreference(
                                 str("piko_tab_pill_reset_image"),
@@ -1173,8 +1231,9 @@ public class ScreenBuilder {
         );
 
         // Instagram's own floating bar, as a second way to get a floating bar with the page running behind it. The
-        // pill above steps aside while this is on, and the size sliders apply to Instagram's bar instead.
-        addPreference(
+        // pill above steps aside while this is on, and the size sliders apply to Instagram's bar instead. Its blur and
+        // its liquid glass have their own buttons at the top of the page.
+        addToNavTab(NAV_TAB_DEFAULT,
                 helper.switchPreference(
                         str("piko_native_floating_nav"),
                         "",
@@ -1182,111 +1241,9 @@ public class ScreenBuilder {
                 )
         );
 
-        // Live blur behind Instagram's own floating bar. Only does something while that bar is on, so it is dimmed
-        // otherwise, like the size sliders.
-        addPreference(
-                helper.availableWhen(
-                        helper.switchPreference(
-                                str("piko_native_floating_nav_blur"),
-                                "",
-                                Settings.NATIVE_FLOATING_NAV_BLUR
-                        ),
-                        () -> Pref.nativeFloatingNav()
-                )
-        );
-
-        // How strong the blur is and how see-through the glass is. Both belong to the blur above, so they are dimmed
-        // unless Instagram's own floating bar and its blur are on.
-        addPreference(
-                helper.availableWhen(
-                        helper.percentSliderPreference(
-                                "piko_native_floating_nav_blur_level",
-                                str("piko_native_floating_nav_blur_level"),
-                                "",
-                                new PercentSliderPreference.Access() {
-                                    @Override public int get() { return Pref.nativeFloatingNavBlurLevel(); }
-                                    @Override public void set(int percent) { Pref.setNativeFloatingNavBlurLevel(percent); }
-                                    @Override public void live(int percent) { FloatingNavSizePreference.previewGlass(percent, -1); }
-                                }
-                        ),
-                        () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur()
-                )
-        );
-        addPreference(
-                helper.availableWhen(
-                        helper.percentSliderPreference(
-                                "piko_native_floating_nav_transparency",
-                                str("piko_native_floating_nav_transparency"),
-                                "",
-                                new PercentSliderPreference.Access() {
-                                    @Override public int get() { return Pref.nativeFloatingNavTransparency(); }
-                                    @Override public void set(int percent) { Pref.setNativeFloatingNavTransparency(percent); }
-                                    @Override public void live(int percent) { FloatingNavSizePreference.previewGlass(-1, percent); }
-                                }
-                        ),
-                        () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur()
-                )
-        );
-
-        // Liquid glass on top of the blur: the rim bends what is behind the bar. Needs the blur, so it is dimmed
-        // unless Instagram's own floating bar and its blur are on. The slider is dimmed until the switch is on.
-        addPreference(
-                helper.availableWhen(
-                        helper.switchPreference(
-                                str("piko_native_floating_nav_liquid"),
-                                "",
-                                Settings.NATIVE_FLOATING_NAV_LIQUID
-                        ),
-                        () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur()
-                )
-        );
-        // The rest of the liquid glass playground, one slider each (see LiquidGlassLook): dimmed until the switch above
-        // is on.
-        for (final app.morphe.extension.instagram.patches.navigation.LiquidGlassLook.Option option
-                : app.morphe.extension.instagram.patches.navigation.LiquidGlassLook.OPTIONS) {
-            addPreference(
-                    helper.availableWhen(
-                            helper.percentSliderPreference(
-                                    option.titleKey,
-                                    str(option.titleKey),
-                                    "",
-                                    new PercentSliderPreference.Access() {
-                                        @Override public int get() { return option.get(); }
-                                        @Override public void set(int percent) { option.set(percent); }
-                                        @Override public void live(int percent) { }
-                                        @Override public String format(int percent) { return option.format.show(percent); }
-                                    }
-                            ),
-                            () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur() && Pref.nativeFloatingNavLiquid()
-                    )
-            );
-        }
-        // Bevel mode: the pill (the rim bends the page) or a dome (a magnifier with a flat back).
-        addPreference(
-                helper.availableWhen(
-                        helper.switchPreference(
-                                str("piko_native_floating_nav_dome"),
-                                "",
-                                Settings.NATIVE_FLOATING_NAV_DOME
-                        ),
-                        () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur() && Pref.nativeFloatingNavLiquid()
-                )
-        );
-        // Puts every liquid glass slider (and the bevel mode) back to its default.
-        addPreference(
-                helper.availableWhen(
-                        helper.buttonPreference(
-                                str("piko_liquid_glass_reset"),
-                                "",
-                                "piko_liquid_glass_reset"
-                        ),
-                        () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur() && Pref.nativeFloatingNavLiquid()
-                )
-        );
-
         // The system's gesture line under the floating bar. Only does something while one of the two floating bars
         // is on, so it is dimmed otherwise, like the size sliders.
-        addPreference(
+        addToNavTab(NAV_TAB_DEFAULT,
                 helper.availableWhen(
                         helper.switchPreference(
                                 str("piko_hide_gesture_line"),
@@ -1299,7 +1256,7 @@ public class ScreenBuilder {
 
         // Tap to copy what Instagram's own floating bar looks like inside (sizes, layout, offsets), to paste in a bug
         // report. Dimmed unless Instagram's own floating bar is on, like the size sliders.
-        addPreference(
+        addToNavTab(NAV_TAB_DEFAULT,
                 helper.availableWhen(
                         helper.buttonPreference(
                                 str("piko_copy_nav_bar_info"),
@@ -1311,7 +1268,7 @@ public class ScreenBuilder {
         );
 
         // The rounded highlight behind the selected tab. Works on the stock bar and on the floating bar.
-        addPreference(
+        addToNavTab(NAV_TAB_DEFAULT,
                 helper.switchPreference(
                         str("piko_remove_selected_tab_pill"),
                         "",
@@ -1319,21 +1276,197 @@ public class ScreenBuilder {
                 )
         );
 
-        if (!(SettingsStatus.hideNavigationButtons)) return;
+        if (SettingsStatus.hideNavigationButtons) {
+            addToNavTab(NAV_TAB_DEFAULT,
+                    helper.navigationBarPreference(
+                            str("piko_navigation_tabs_title"),
+                            ""
+                    )
+            );
 
-        addPreference(
-                helper.navigationBarPreference(
-                        str("piko_navigation_tabs_title"),
-                        ""
+            addToNavTab(NAV_TAB_DEFAULT,
+                    helper.navigationStartupPreference(
+                            str("piko_navigation_startup_tab"),
+                            ""
+                    )
+            );
+        }
+
+        // ---------------------------------------------------------------------------------------------------
+        // Blur: only the blur behind Instagram's own floating bar.
+        // ---------------------------------------------------------------------------------------------------
+
+        // Live blur behind Instagram's own floating bar. Only does something while that bar is on, so it is dimmed
+        // otherwise, like the size sliders.
+        addToNavTab(NAV_TAB_BLUR,
+                helper.availableWhen(
+                        helper.switchPreference(
+                                str("piko_native_floating_nav_blur"),
+                                "",
+                                Settings.NATIVE_FLOATING_NAV_BLUR
+                        ),
+                        () -> Pref.nativeFloatingNav()
                 )
         );
 
-        addPreference(
-                helper.navigationStartupPreference(
-                        str("piko_navigation_startup_tab"),
-                        ""
+        // How strong the blur is and how see-through the glass is. Both belong to the blur above, so they are dimmed
+        // unless Instagram's own floating bar and its blur are on.
+        addToNavTab(NAV_TAB_BLUR,
+                helper.availableWhen(
+                        helper.percentSliderPreference(
+                                "piko_native_floating_nav_blur_level",
+                                str("piko_native_floating_nav_blur_level"),
+                                "",
+                                new PercentSliderPreference.Access() {
+                                    @Override public int get() { return Pref.nativeFloatingNavBlurLevel(); }
+                                    @Override public void set(int percent) {
+                                        Pref.setNativeFloatingNavBlurLevel(percent);
+                                        FloatingNavSizePreference.glassSaved();
+                                    }
+                                    @Override public void live(int percent) { FloatingNavSizePreference.previewGlass(percent, -1); }
+                                }
+                        ),
+                        () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur()
                 )
         );
+        addToNavTab(NAV_TAB_BLUR,
+                helper.availableWhen(
+                        helper.percentSliderPreference(
+                                "piko_native_floating_nav_transparency",
+                                str("piko_native_floating_nav_transparency"),
+                                "",
+                                new PercentSliderPreference.Access() {
+                                    @Override public int get() { return Pref.nativeFloatingNavTransparency(); }
+                                    @Override public void set(int percent) {
+                                        Pref.setNativeFloatingNavTransparency(percent);
+                                        FloatingNavSizePreference.glassSaved();
+                                    }
+                                    @Override public void live(int percent) { FloatingNavSizePreference.previewGlass(-1, percent); }
+                                }
+                        ),
+                        () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur()
+                )
+        );
+
+        // ---------------------------------------------------------------------------------------------------
+        // Liquid glass: the switch and everything of the liquid glass look.
+        // ---------------------------------------------------------------------------------------------------
+
+        // Liquid glass on top of the blur: the rim bends what is behind the bar. Needs the blur, so it is dimmed
+        // unless Instagram's own floating bar and its blur are on. The slider is dimmed until the switch is on.
+        addToNavTab(NAV_TAB_LIQUID,
+                helper.availableWhen(
+                        helper.switchPreference(
+                                str("piko_native_floating_nav_liquid"),
+                                "",
+                                Settings.NATIVE_FLOATING_NAV_LIQUID
+                        ),
+                        () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur()
+                )
+        );
+        // The rest of the liquid glass playground, one slider each (see LiquidGlassLook): dimmed until the switch above
+        // is on.
+        for (int optionIndex = 0;
+             optionIndex < app.morphe.extension.instagram.patches.navigation.LiquidGlassLook.OPTIONS.length;
+             optionIndex++) {
+            final int index = optionIndex;
+            final app.morphe.extension.instagram.patches.navigation.LiquidGlassLook.Option option =
+                    app.morphe.extension.instagram.patches.navigation.LiquidGlassLook.OPTIONS[index];
+            addToNavTab(NAV_TAB_LIQUID,
+                    helper.availableWhen(
+                            helper.percentSliderPreference(
+                                    option.titleKey,
+                                    str(option.titleKey),
+                                    "",
+                                    new PercentSliderPreference.Access() {
+                                        @Override public int get() { return option.get(); }
+                                        @Override public void set(int percent) {
+                                            option.set(percent);
+                                            FloatingNavSizePreference.glassSaved();
+                                        }
+                                        // The pinned preview shows the glass as the slider moves.
+                                        @Override public void live(int percent) {
+                                            FloatingNavSizePreference.previewLiquid(index, percent);
+                                        }
+                                        @Override public String format(int percent) { return option.format.show(percent); }
+                                    }
+                            ),
+                            () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur() && Pref.nativeFloatingNavLiquid()
+                    )
+            );
+        }
+        // Bevel mode: the pill (the rim bends the page) or a dome (a magnifier with a flat back).
+        addToNavTab(NAV_TAB_LIQUID,
+                helper.availableWhen(
+                        helper.switchPreference(
+                                str("piko_native_floating_nav_dome"),
+                                "",
+                                Settings.NATIVE_FLOATING_NAV_DOME
+                        ),
+                        () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur() && Pref.nativeFloatingNavLiquid()
+                )
+        );
+        // Puts every liquid glass slider (and the bevel mode) back to its default.
+        addToNavTab(NAV_TAB_LIQUID,
+                helper.availableWhen(
+                        helper.buttonPreference(
+                                str("piko_liquid_glass_reset"),
+                                "",
+                                "piko_liquid_glass_reset"
+                        ),
+                        () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur() && Pref.nativeFloatingNavLiquid()
+                )
+        );
+
+        // ---------------------------------------------------------------------------------------------------
+        // Put the rows on the screen.
+        // ---------------------------------------------------------------------------------------------------
+
+        if (searchIndexing) {
+            // Search has to find every row, wherever it lives, and has no use for the buttons.
+            for (List<Preference> rows : navTabs) {
+                for (Preference preference : rows) {
+                    addPreference(preference);
+                }
+            }
+            return;
+        }
+
+        // Coming from a search result: open the page that holds the row that was searched for.
+        if (targetPreferenceKey != null && !targetPreferenceKey.isEmpty()) {
+            for (int tab = 0; tab < NAV_TAB_COUNT; tab++) {
+                for (Preference preference : navTabs.get(tab)) {
+                    if (targetPreferenceKey.equals(preference.getKey())) {
+                        navTab = tab;
+                    }
+                }
+            }
+        }
+
+        TabSwitcherPref switcher = new TabSwitcherPref(
+                context,
+                new CharSequence[] {
+                        str("piko_nav_tab_default"),
+                        str("piko_nav_tab_blur"),
+                        str("piko_nav_tab_liquid")
+                },
+                navTab,
+                tab -> {
+                    navTab = tab;
+                    showNavTab(tab);
+                }
+        );
+        switcher.setKey("piko_nav_tab_switcher");
+        switcher.setOrder(0);
+        addPreference(switcher);
+
+        List<Preference> firstRows = navTabs.get(navTab);
+        for (int i = 0; i < firstRows.size(); i++) {
+            Preference preference = firstRows.get(i);
+            preference.setOrder(i + 1);
+            addPreference(preference);
+        }
+        navTabShown = navTab;
     }
 
     public void buildRecommendedFlagsSection() {

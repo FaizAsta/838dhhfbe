@@ -129,6 +129,21 @@ public final class LiquidGlassLook {
                 Pref.nativeFloatingNavDome());
     }
 
+    /**
+     * Like {@link #read()}, but a slider that is being dragged shows the value it is on right now: {@code live[i]}
+     * (0 to 100) stands in for the saved value of {@code OPTIONS[i]}, and a negative number leaves the saved one. Used
+     * by the preview on the settings screen, which shows the glass before a drag has saved anything.
+     */
+    public static LiquidGlassLook read(int[] live) {
+        Option[] o = OPTIONS;
+        int[] v = new int[o.length];
+        for (int i = 0; i < v.length; i++) {
+            v[i] = live != null && i < live.length && live[i] >= 0 ? live[i] : o[i].get();
+        }
+        return new LiquidGlassLook(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10], v[11], v[12],
+                Pref.nativeFloatingNavDome());
+    }
+
     private static int clamp(int percent) {
         return Math.max(0, Math.min(100, percent));
     }

@@ -12,11 +12,10 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
-import android.graphics.RenderEffect;
-import android.graphics.RenderNode;
 import android.graphics.Shader;
 import android.os.Build;
 import android.preference.Preference;
@@ -25,15 +24,19 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
 import java.lang.ref.WeakReference;
+import java.util.Arrays;
 
 import app.morphe.extension.crimera.sharedPreference.SharedPref;
 import app.morphe.extension.instagram.patches.navigation.FloatingNavBar;
 import app.morphe.extension.instagram.patches.navigation.FloatingNavSize;
+import app.morphe.extension.instagram.patches.navigation.LiquidGlassLook;
+import app.morphe.extension.instagram.patches.navigation.LiquidGlassPreview;
 import app.morphe.extension.instagram.patches.navigation.SelectedTabPill;
 import app.morphe.extension.instagram.settings.Settings;
 import app.morphe.extension.instagram.utils.Pref;
@@ -55,19 +58,28 @@ import app.morphe.extension.instagram.utils.Pref;
  * <p>
  * The sliders are shown the way a person thinks of them: the right end is the widest and the tallest pill. What is
  * stored is the distance from the sides and the air above and below the pill, which run the other way round.
+ * <p>
+ * The preview is not a row of this list: it lives in a strip of its own that the settings page pins between the
+ * toolbar and the list (see {@link #createPinnedPreview}), so it stays in view while the list scrolls and on every
+ * page of the Navigation bar settings (Default, Blur and Liquid glass). On Instagram's own floating bar it shows the
+ * glass as the bar draws it: the blur, the liquid glass rim, the shadow, the opacity and the corner radius all follow
+ * their sliders live, while they are dragged.
  */
 public class FloatingNavSizePreference extends Preference {
     private static final int TAB_COUNT = 5;
     private static final int RESET_TAP_PADDING_DP = 8;
 
-    /** Blur radius (dp) at 100 % on the blur slider: the same scale the real bar uses (see NativeBarBlur). */
-    private static final float MAX_BLUR_RADIUS_DP = 44f;
-
-    // What the blur and transparency sliders show while they are being dragged (-1: not dragging, read the saved
-    // value). Written and read on the main thread.
+    // What the blur, transparency and liquid glass sliders show while they are being dragged (-1: not dragging, read
+    // the saved value). Written and read on the main thread.
     private static int liveBlur = -1;
     private static int liveTransparency = -1;
+    /** One entry per slider of {@link LiquidGlassLook#OPTIONS}. */
+    private static final int[] liveLiquid = new int[LiquidGlassLook.OPTIONS.length];
     private static WeakReference<PreviewView> activePreview = new WeakReference<>(null);
+
+    static {
+        Arrays.fill(liveLiquid, -1);
+    }
 
     /**
      * Called by the blur and transparency sliders on every step, so the preview shows the glass of Instagram's own
@@ -80,21 +92,83 @@ public class FloatingNavSizePreference extends Preference {
         if (view != null) view.invalidate();
     }
 
+    /**
+     * Called by a liquid glass slider on every step ({@code index} is its place in {@link LiquidGlassLook#OPTIONS}),
+     * so the preview shows the glass as it will look.
+     */
+    public static void previewLiquid(int index, int percent) {
+        if (index < 0 || index >= liveLiquid.length || percent < 0) return;
+        liveLiquid[index] = Math.min(100, percent);
+        PreviewView view = activePreview.get();
+        if (view != null) view.invalidate();
+    }
+
+    /**
+     * A glass slider has saved its value: the preview reads the settings again instead of what the sliders showed
+     * while they were dragged.
+     */
+    public static void glassSaved() {
+        liveBlur = -1;
+        liveTransparency = -1;
+        Arrays.fill(liveLiquid, -1);
+        PreviewView view = activePreview.get();
+        if (view != null) view.invalidate();
+    }
+
     /** Redraws the preview (the highlight's picture was replaced or deleted). Safe from any thread. */
     public static void refreshPreview() {
         PreviewView view = activePreview.get();
         if (view != null) view.postInvalidate();
     }
 
-    // The "Custom selected tab pill" switch redraws the preview when it is turned on or off. The listener is kept in a
-    // static field because the preferences hold their listeners weakly.
-    private static final SharedPreferences.OnSharedPreferenceChangeListener TAB_PILL_LISTENER =
+    // Any switch or slider of the Navigation bar settings can change what the preview shows (the highlight, the blur,
+    // the liquid glass, the bevel mode, which bar is on), so a change of any setting redraws it. The listener is kept
+    // in a static field because the preferences hold their listeners weakly.
+    private static final SharedPreferences.OnSharedPreferenceChangeListener PREVIEW_LISTENER =
             (preferences, key) -> {
-                if (!Settings.CUSTOM_TAB_PILL.key.equals(key)) return;
                 PreviewView view = activePreview.get();
-                if (view != null) view.postInvalidate();
+                if (view != null) view.post(view::onSettingsChanged);
             };
-    private static boolean tabPillListenerRegistered;
+    private static boolean previewListenerRegistered;
+
+    private static void registerPreviewListener() {
+        if (!previewListenerRegistered) {
+            previewListenerRegistered = SharedPref.registerOnSharedPreferenceChangeListener(PREVIEW_LISTENER);
+        }
+    }
+
+    /**
+     * The preview of the bar, in a strip of its own for the settings page to pin between its toolbar and its list
+     * (see {@code SettingsActivity.Controller#pinHeader}). The sliders of this row and of the blur and liquid glass
+     * pages drive it.
+     */
+    public static View createPinnedPreview(Context context) {
+        registerPreviewListener();
+        // A new page: nothing is being dragged.
+        liveBlur = -1;
+        liveTransparency = -1;
+        Arrays.fill(liveLiquid, -1);
+
+        PreviewView view = new PreviewView(context);
+        view.setContentDescription(str("piko_floating_nav_size_preview"));
+        view.setSize(Pref.floatingNavSideDp(), Pref.floatingNavGapDp(), Pref.floatingNavBottomDp());
+        view.refreshAvailability();
+        activePreview = new WeakReference<>(view);
+
+        FrameLayout strip = new FrameLayout(context);
+        strip.setBackgroundColor(InstagramPreferenceStyle.backgroundColor());
+        strip.setPadding(
+                InstagramPreferenceStyle.dp(context, 15),
+                InstagramPreferenceStyle.dp(context, 6),
+                InstagramPreferenceStyle.dp(context, 15),
+                InstagramPreferenceStyle.dp(context, 8)
+        );
+        strip.addView(view, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+        ));
+        return strip;
+    }
 
     private TextView titleView;
     private TextView summaryView;
@@ -112,7 +186,6 @@ public class FloatingNavSizePreference extends Preference {
     private SmoothSlider widthSlider;
     private SmoothSlider heightSlider;
     private SmoothSlider bottomSlider;
-    private PreviewView preview;
 
     private int sideDp = FloatingNavSize.SIDE_DEFAULT_DP;
     private int gapDp = FloatingNavSize.GAP_DEFAULT_DP;
@@ -125,9 +198,7 @@ public class FloatingNavSizePreference extends Preference {
         // The values live in their own settings, written by this row when a slider settles.
         setPersistent(false);
         setSelectable(false);
-        if (!tabPillListenerRegistered) {
-            tabPillListenerRegistered = SharedPref.registerOnSharedPreferenceChangeListener(TAB_PILL_LISTENER);
-        }
+        registerPreviewListener();
     }
 
     @Override
@@ -190,17 +261,7 @@ public class FloatingNavSizePreference extends Preference {
         summaryParams.topMargin = InstagramPreferenceStyle.dp(context, 2);
         row.addView(summaryView, summaryParams);
 
-        // The live preview.
-        preview = new PreviewView(context);
-        preview.setContentDescription(str("piko_floating_nav_size_preview"));
-        activePreview = new WeakReference<>(preview);
-        LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        previewParams.topMargin = InstagramPreferenceStyle.dp(context, 12);
-        previewParams.bottomMargin = InstagramPreferenceStyle.dp(context, 4);
-        row.addView(preview, previewParams);
+        // The live preview is not in this row: it is pinned above the list (see createPinnedPreview).
 
         // Width.
         widthLabel = new TextView(context);
@@ -360,6 +421,7 @@ public class FloatingNavSizePreference extends Preference {
             heightValue.setText(Math.round(FloatingNavSize.pillHeightDp(gapDp)) + " dp");
         }
         if (bottomValue != null) bottomValue.setText(bottomDp + " dp");
+        PreviewView preview = activePreview.get();
         if (preview != null) preview.setSize(sideDp, gapDp, bottomDp);
     }
 
@@ -381,6 +443,7 @@ public class FloatingNavSizePreference extends Preference {
         // The saved blur and transparency are current again (a slider that was dragged has saved them).
         liveBlur = -1;
         liveTransparency = -1;
+        Arrays.fill(liveLiquid, -1);
         // Never move a slider under a finger that is dragging it.
         if (!dragging) {
             sideDp = Pref.floatingNavSideDp();
@@ -412,9 +475,10 @@ public class FloatingNavSizePreference extends Preference {
         tint(widthBar, enabled, valueColor);
         tint(heightBar, enabled, valueColor);
         tint(bottomBar, enabled, valueColor);
+        PreviewView preview = activePreview.get();
         if (preview != null) {
             preview.refreshTheme();
-            preview.setAlpha(enabled ? 1f : 0.45f);
+            preview.refreshAvailability();
         }
         showValues();
         view.setEnabled(enabled);
@@ -445,15 +509,22 @@ public class FloatingNavSizePreference extends Preference {
         private final Paint iconStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint iconFill = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF rect = new RectF();
+        /** The pill, for the glass. Not {@code rect}: drawing the page behind the glass reuses that one. */
+        private final RectF pillRect = new RectF();
         private final RectF ring = new RectF();
         private final RectF iconRect = new RectF();
         private final RectF tabRect = new RectF();
         private final SelectedTabPill.Renderer tabRenderer;
         private final Path clip = new Path();
         private final Path shape = new Path();
-        private final Path pillClip = new Path();
-        /** The page behind the pill, blurred (Android 12+); null until it is first needed. */
-        private Glass31 glass;
+        private final Paint picture = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint dots = new Paint(Paint.ANTI_ALIAS_FLAG);
+        /** The glass of Instagram's own bar (Android 12+); null until it is first needed. */
+        private LiquidGlassPreview glass;
+        /** What is behind the glass: the same page the preview shows, recorded for the blur. */
+        private final PageBehind pageBehind = new PageBehind();
+        private Shader pictureShader;
+        private float pictureShaderBottom = -1f;
 
         /** The unscaled height the preview was last measured for, to tell when it must be laid out again. */
         private int measuredBase = -1;
@@ -482,7 +553,20 @@ public class FloatingNavSizePreference extends Preference {
             // The icons are drawn on a 24 by 24 grid, scaled to ICON_DP.
             iconStroke.setStrokeWidth(2f);
             iconFill.setStyle(Paint.Style.FILL);
+            picture.setStyle(Paint.Style.FILL);
+            dots.setStyle(Paint.Style.FILL);
             refreshTheme();
+        }
+
+        /** Some setting changed (a switch, a slider): what the preview shows may be different. */
+        void onSettingsChanged() {
+            refreshAvailability();
+            invalidate();
+        }
+
+        /** Dimmed while neither floating bar is on, like the size sliders. */
+        void refreshAvailability() {
+            setAlpha(Pref.floatingNavBar() || Pref.nativeFloatingNav() ? 1f : 0.45f);
         }
 
         @Override
@@ -586,15 +670,72 @@ public class FloatingNavSizePreference extends Preference {
             rect.set(margin + 30f * density, 19f * density, margin + 110f * density, 25f * density);
             canvas.drawRoundRect(rect, 3f * density, 3f * density, fill);
 
+            float pictureBottom = (PAGE_ABOVE_DP + FloatingNavSize.barDp() + FloatingNavSize.insetDp() + 40f) * density;
+            if (glassOn()) {
+                drawVividPicture(canvas, w, margin, pictureBottom);
+                return;
+            }
+
             fill.setColor(mix(page, text, 0.09f));
-            rect.set(margin, 38f * density, w - margin, (PAGE_ABOVE_DP + FloatingNavSize.barDp()
-                    + FloatingNavSize.insetDp() + 40f) * density);
+            rect.set(margin, 38f * density, w - margin, pictureBottom);
             canvas.drawRoundRect(rect, 10f * density, 10f * density, fill);
 
             // Something in the picture, so it is clear the pill is on top of the page and not beside it.
             fill.setColor(mix(page, text, 0.15f));
             canvas.drawCircle(w * 0.78f, 74f * density, 30f * density, fill);
             canvas.drawCircle(w * 0.22f, 96f * density, 22f * density, fill);
+        }
+
+        /**
+         * The picture of the post while the glass is shown: colourful, with edges all over it. A pill of plain grey
+         * glass over a plain grey page shows nothing of the blur, the bend at the rim or the colour fringe; over this
+         * they can be seen.
+         */
+        private void drawVividPicture(Canvas canvas, float w, float margin, float bottom) {
+            float top = 38f * density;
+            if (pictureShader == null || pictureShaderBottom != bottom) {
+                pictureShaderBottom = bottom;
+                pictureShader = new LinearGradient(margin, top, w - margin, bottom,
+                        new int[] {0xFF7F5AF0, 0xFFE0508B, 0xFFFF9A4D},
+                        new float[] {0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
+            }
+            picture.setShader(pictureShader);
+            rect.set(margin, top, w - margin, bottom);
+            canvas.drawRoundRect(rect, 10f * density, 10f * density, picture);
+            picture.setShader(null);
+
+            // Rows of dots (light and dark), so the rim of the glass always has something to bend.
+            int save = canvas.save();
+            canvas.clipRect(rect);
+            float step = 22f * density;
+            int row = 0;
+            for (float y = top + step / 2f; y < bottom; y += step, row++) {
+                float shift = (row % 2 == 0) ? 0f : step / 2f;
+                int column = 0;
+                for (float x = margin + step / 2f + shift; x < w - margin; x += step, column++) {
+                    dots.setColor(((row + column) % 2 == 0) ? 0x66FFFFFF : 0x40000000);
+                    canvas.drawCircle(x, y, 5f * density, dots);
+                }
+            }
+            canvas.restoreToCount(save);
+
+            // A sun and a hill, with hard edges.
+            dots.setColor(0xE6FFE9A8);
+            canvas.drawCircle(w * 0.78f, 74f * density, 26f * density, dots);
+            dots.setColor(0x992A1B5C);
+            canvas.drawCircle(w * 0.22f, bottom - 6f * density, 52f * density, dots);
+        }
+
+        /** The page behind the glass, drawn again for the blur. */
+        private final class PageBehind implements LiquidGlassPreview.Page {
+            float width;
+            float height;
+
+            @Override
+            public void draw(Canvas canvas) {
+                drawBackdrop(canvas, width, height);
+                drawPage(canvas, width);
+            }
         }
 
         /** The pill, with the same geometry and shade as the real bar, and the five tabs on it. */
@@ -614,7 +755,8 @@ public class FloatingNavSizePreference extends Preference {
             if (right - left < 8f || bottom - top < 8f) return;
             float radius = (bottom - top) / 2f;
 
-            if (!dark) {
+            boolean glassShown = glassOn();
+            if (!dark && !glassShown) {
                 // The soft lift under the pill on a light bar.
                 for (int i = 3; i >= 1; i--) {
                     float grow = i * 1.5f * density;
@@ -625,25 +767,28 @@ public class FloatingNavSizePreference extends Preference {
             }
             rect.set(left, top, right, bottom);
             int shade = FloatingNavBar.pillFill(page, dark);
-            if (glassOn()) {
+            if (glassShown) {
+                // Instagram's own bar: its shadow, blur, liquid glass rim, tint, opacity and corner radius, drawn by
+                // the same code and from the same numbers as the real bar, with the sliders' live values.
                 int blur = liveBlur >= 0 ? liveBlur : Pref.nativeFloatingNavBlurLevel();
                 int transparency = liveTransparency >= 0 ? liveTransparency : Pref.nativeFloatingNavTransparency();
-                pillClip.rewind();
-                pillClip.addRoundRect(rect, radius, radius, Path.Direction.CW);
-                if (glass == null) glass = new Glass31();
-                float blurPx = MAX_BLUR_RADIUS_DP * density * blur / 100f;
-                glass.draw(this, canvas, pillClip, w, h, blurPx < 0.5f ? 0f : blurPx);
-                // The tint over the blur: 0 % transparency is solid, 100 % is none (as on the real bar).
-                int alpha = Math.round(255f * (100 - transparency) / 100f);
-                fill.setColor((shade & 0x00FFFFFF) | (alpha << 24));
+                boolean liquid = Pref.nativeFloatingNavLiquid();
+                LiquidGlassLook look = liquid ? LiquidGlassLook.read(liveLiquid) : null;
+                pillRect.set(left, top, right, bottom);
+                radius = LiquidGlassPreview.radius(pillRect, liquid, look);
+                if (glass == null) glass = new LiquidGlassPreview(density);
+                pageBehind.width = w;
+                pageBehind.height = h;
+                glass.draw(canvas, pillRect, radius, blur, transparency, liquid, look, shade,
+                        FloatingNavBar.pillEdge(dark), pageBehind);
             } else {
                 fill.setColor(shade);
+                canvas.drawRoundRect(rect, radius, radius, fill);
+                edge.setColor(FloatingNavBar.pillEdge(dark));
+                float half = edge.getStrokeWidth() / 2f;
+                ring.set(left + half, top + half, right - half, bottom - half);
+                canvas.drawRoundRect(ring, radius - half, radius - half, edge);
             }
-            canvas.drawRoundRect(rect, radius, radius, fill);
-            edge.setColor(FloatingNavBar.pillEdge(dark));
-            float half = edge.getStrokeWidth() / 2f;
-            ring.set(left + half, top + half, right - half, bottom - half);
-            canvas.drawRoundRect(ring, radius - half, radius - half, edge);
 
             // The tabs share the space inside the pill equally, as they do in the bar.
             float tabWidth = (right - left) / TAB_COUNT;
@@ -666,35 +811,6 @@ public class FloatingNavSizePreference extends Preference {
                 canvas.translate(centerX - icon / 2f, centerY - icon / 2f);
                 canvas.scale(icon / 24f, icon / 24f);
                 drawIcon(canvas, i);
-                canvas.restore();
-            }
-        }
-
-        /** The page behind the pill, recorded and blurred. Only made on Android 12 or newer. */
-        private static final class Glass31 {
-            private final RenderNode node = new RenderNode("PikoPreviewGlass");
-            private float lastBlurPx = -1f;
-
-            void draw(PreviewView view, Canvas canvas, Path clip, float w, float h, float blurPx) {
-                if (!canvas.isHardwareAccelerated()) return;
-                node.setPosition(0, 0, Math.round(w), Math.round(h));
-                if (blurPx != lastBlurPx) {
-                    lastBlurPx = blurPx;
-                    // CLAMP: the edges repeat instead of fading to black.
-                    node.setRenderEffect(blurPx > 0f
-                            ? RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP)
-                            : null);
-                }
-                Canvas recording = node.beginRecording(Math.round(w), Math.round(h));
-                try {
-                    view.drawBackdrop(recording, w, h);
-                    view.drawPage(recording, w);
-                } finally {
-                    node.endRecording();
-                }
-                canvas.save();
-                canvas.clipPath(clip);
-                canvas.drawRenderNode(node);
                 canvas.restore();
             }
         }
