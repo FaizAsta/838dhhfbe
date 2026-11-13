@@ -732,9 +732,10 @@ final class NativeBarBlur {
             if (blurPx < 0.5f) blurPx = 0f;
             // Liquid glass needs Android 13; below that (or when the shader failed) it is the plain blur.
             boolean glassy = liquid && !liquidFailed && LiquidGlassEffect.supported();
-            // The bent rim looks outside the pill, so the recorded area has that much more room all around.
-            float reach = glassy ? LiquidGlassEffect.reachPx(rect.height(), density, look) : 0f;
-            int pad = (int) Math.ceil(blurPx * 2f + reach);
+            // Room all around the pill for the blur to read (the blur looks that far outside the pill). The glass shader
+            // does not look outside the pill at all: it folds a read that would leave the pill back in, because there
+            // is no blurred picture past the pill's edge (see LiquidGlassEffect).
+            int pad = (int) Math.ceil(blurPx * 2f);
             int width = (int) Math.ceil(rect.width()) + 2 * pad;
             int height = (int) Math.ceil(rect.height()) + 2 * pad;
 

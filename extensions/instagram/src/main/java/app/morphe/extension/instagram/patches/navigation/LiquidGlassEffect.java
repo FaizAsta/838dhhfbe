@@ -22,8 +22,11 @@ import android.os.Build;
  * class is never touched on an older Android.
  * <p>
  * The shader works in the coordinates of the recorded node: the pill sits at {@code pillOrigin} with the size
- * {@code pillSize}, and the node has {@link #reachPx} of extra room around it, so the bent rim can look at the page
- * outside the pill without running out of picture.
+ * {@code pillSize}. It only ever reads the blurred picture <em>inside</em> the pill: the picture is made for what is
+ * drawn, and what is drawn is the pill (the canvas is clipped to it), so a read past the pill's edge gets no blurred
+ * picture, only whatever the graphics layer has there (the sharp page, mirrored, with a colour line where it starts,
+ * as seen on a phone in 1.10.2). The bent rim, the ripple and the colour fringe push a read outwards at the edge, so
+ * a read that would leave the pill is folded back in (mirrored about the edge), which keeps the rim blurred.
  */
 final class LiquidGlassEffect {
     /** {@code RuntimeShader} needs Android 13. */
@@ -36,6 +39,8 @@ final class LiquidGlassEffect {
     private static final float DOME_OF_HALF = 0.5f;
     /** How fast the ripple of the distortion waves, in waves per dp. */
     private static final float WARP_PER_DP = 1f / 28f;
+    /** How far in from the pill's edge (px) the shader keeps its samples, so none lands on the edge pixel's far side. */
+    private static final float KEEP_INSET_PX = 2f;
 
     private static final String AGSL = ""
             + "uniform shader content;\n"
@@ -54,10 +59,23 @@ final class LiquidGlassEffect {
             + "uniform float bright;\n"
             + "uniform float dome;\n"
             + "uniform float domeBend;\n"
+            + "uniform float4 keepIn;\n"
             + "\n"
             + "float roundBox(float2 p, float2 hs, float r) {\n"
             + "    float2 q = abs(p) - (hs - float2(r));\n"
             + "    return length(max(q, float2(0.0))) + min(max(q.x, q.y), 0.0) - r;\n"
+            + "}\n"
+            + "\n"
+            + "// The blurred picture only exists inside the pill (keepIn = left, top, right, bottom): a point that the\n"
+            + "// bend, the ripple or the colour fringe pushes past an edge is folded back in (mirrored about the edge)\n"
+            + "// so it still reads blurred picture. Past the edge the picture is not there at all.\n"
+            + "float2 keep(float2 p) {\n"
+            + "    float2 q = p;\n"
+            + "    if (q.x < keepIn.x) q.x = 2.0 * keepIn.x - q.x;\n"
+            + "    if (q.x > keepIn.z) q.x = 2.0 * keepIn.z - q.x;\n"
+            + "    if (q.y < keepIn.y) q.y = 2.0 * keepIn.y - q.y;\n"
+            + "    if (q.y > keepIn.w) q.y = 2.0 * keepIn.w - q.y;\n"
+            + "    return clamp(q, keepIn.xy, keepIn.zw);\n"
             + "}\n"
             + "\n"
             + "half4 main(float2 coord) {\n"
@@ -86,9 +104,9 @@ final class LiquidGlassEffect {
             + "        sin(coord.y * warpFreq + coord.x * warpFreq * 0.5),\n"
             + "        cos(coord.x * warpFreq - coord.y * warpFreq * 0.5)) * warp;\n"
             + "\n"
-            + "    float4 sr = float4(content.eval(base + shift * (1.0 + chroma)));\n"
-            + "    float4 sg = float4(content.eval(base + shift));\n"
-            + "    float4 sb = float4(content.eval(base + shift * (1.0 - chroma)));\n"
+            + "    float4 sr = float4(content.eval(keep(base + shift * (1.0 + chroma))));\n"
+            + "    float4 sg = float4(content.eval(keep(base + shift)));\n"
+            + "    float4 sb = float4(content.eval(keep(base + shift * (1.0 - chroma))));\n"
             + "    float3 col = float3(sr.r, sg.g, sb.b);\n"
             + "\n"
             + "    float luma = dot(col, float3(0.2126, 0.7152, 0.0722));\n"
@@ -126,12 +144,6 @@ final class LiquidGlassEffect {
         return Math.min(pillWidthPx, pillHeightPx) * 0.5f * DOME_OF_HALF * look.refractionStrength();
     }
 
-    /** How far the recorded area has to reach outside the pill for the shader, in px. */
-    static float reachPx(float pillHeightPx, float density, LiquidGlassLook look) {
-        float shift = bendPx(pillHeightPx, density, look) * (1f + look.chromaAmount());
-        return shift + look.distortionPx(density) + 2f * density;
-    }
-
     /**
      * The effect for a node whose pill starts at ({@code originPx}, {@code originPx}) and is {@code width} by
      * {@code height} px with corners of {@code radius} px. {@code blur} (may be null) is applied first, so the
@@ -156,6 +168,11 @@ final class LiquidGlassEffect {
         shader.setFloatUniform("bright", look.brightnessAdd());
         shader.setFloatUniform("dome", look.dome ? 1f : 0f);
         shader.setFloatUniform("domeBend", domePx(width, height, look));
+        // The part of the node that is certain to hold the blurred picture: the pill itself, a little in from its edge
+        // (the picture is only made for what is drawn, and what is drawn is the pill).
+        float inset = Math.min(KEEP_INSET_PX, Math.min(width, height) / 4f);
+        shader.setFloatUniform("keepIn", originPx + inset, originPx + inset, originPx + width - inset,
+                originPx + height - inset);
         RenderEffect glass = RenderEffect.createRuntimeShaderEffect(shader, "content");
         // createChainEffect(outer, inner): the inner effect (the blur) runs first.
         return blur == null ? glass : RenderEffect.createChainEffect(glass, blur);
