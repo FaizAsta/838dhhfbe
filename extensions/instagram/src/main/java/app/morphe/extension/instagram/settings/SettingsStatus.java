@@ -241,10 +241,7 @@ public class SettingsStatus {
     public static void moreOptionsOnPost() { moreOptionsOnPost = true; }
     public static boolean moreOptionsOnProfile = false;
     public static void moreOptionsOnProfile() { moreOptionsOnProfile = true; }
-    public static boolean miscSection() {return ( moreOptionsOnProfile || moreOptionsOnPost || changeLikeAnimation || unlockPlusBenefits || removeEmptyBottomSpace || copyCommentButton || improveImageViewing || resumeReelsAfterScrolling || disableAnalytics || followBackIndicator || followListNonFollowerBadge || customFont || reelsAmbient());}
-
-    // Ambient glow on Reels: drawn by the extension alone (see ReelsAmbient), so there is no patch to wait for.
-    public static boolean reelsAmbient() { return true; }
+    public static boolean miscSection() {return ( moreOptionsOnProfile || moreOptionsOnPost || changeLikeAnimation || unlockPlusBenefits || removeEmptyBottomSpace || copyCommentButton || improveImageViewing || resumeReelsAfterScrolling || disableAnalytics || followBackIndicator || followListNonFollowerBadge || customFont);}
 
     //Font section.
     public static boolean customFont = false;

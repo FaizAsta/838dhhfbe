@@ -477,6 +477,21 @@ public class Pref {
         return percent(SharedPref.getStringPref(Settings.NATIVE_FLOATING_NAV_TRANSPARENCY), 50);
     }
 
+    /** The liquid glass look (a rim that bends the page) is on for Instagram's own floating bar. */
+    public static boolean nativeFloatingNavLiquid() {
+        return SharedPref.getBooleanPref(Settings.NATIVE_FLOATING_NAV_LIQUID);
+    }
+
+    /** How strongly the rim of the liquid glass bends the page, 0 to 100. */
+    public static int nativeFloatingNavRefraction() {
+        return percent(SharedPref.getStringPref(Settings.NATIVE_FLOATING_NAV_REFRACTION), 60);
+    }
+
+    public static boolean setNativeFloatingNavRefraction(int percent) {
+        return SharedPref.setStringPref(Settings.NATIVE_FLOATING_NAV_REFRACTION.key,
+                String.valueOf(Math.max(0, Math.min(100, percent))));
+    }
+
     public static boolean setNativeFloatingNavBlurLevel(int percent) {
         return SharedPref.setStringPref(Settings.NATIVE_FLOATING_NAV_BLUR_LEVEL.key,
                 String.valueOf(Math.max(0, Math.min(100, percent))));
@@ -512,10 +527,6 @@ public class Pref {
     /** The highlight can be pressed and held, moved to another tab and let go there to open that tab. */
     public static boolean tabPillDrag() {
         return SharedPref.getBooleanPref(Settings.CUSTOM_TAB_PILL_DRAG);
-    }
-
-    public static boolean reelsAmbient() {
-        return SharedPref.getBooleanPref(Settings.REELS_AMBIENT);
     }
 
     /** Distance of the floating bar from each side of the screen, in dp (a larger value is a narrower pill). */

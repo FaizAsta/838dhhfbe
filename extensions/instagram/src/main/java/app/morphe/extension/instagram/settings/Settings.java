@@ -143,10 +143,6 @@ public class Settings {
     // and it only does anything while "Custom selected tab pill" is on. Applies as soon as you go back to the app.
     // See TabPillDrag.
     public static final BooleanSetting CUSTOM_TAB_PILL_DRAG = new BooleanSetting("custom_tab_pill_drag", true, NOT_REQUIRED);
-    // Ambient glow on Reels, like ambient mode on YouTube: when a Reel does not fill the screen, the bars above and
-    // below it are filled with a soft glow in the colours of the video. Off by default. Applies as soon as you go
-    // back to the app. See ReelsAmbient.
-    public static final BooleanSetting REELS_AMBIENT = new BooleanSetting("reels_ambient", false, NOT_REQUIRED);
     // Takes away the rounded pill behind the selected tab of the bottom bar by turning Instagram's
     // enable_active_pills_on_tab_bar flag off. On by default; the flag is read when the bar is created, so it needs a
     // restart. See HookFlags.
@@ -167,6 +163,15 @@ public class Settings {
             new StringSetting("native_floating_nav_blur_level", "50", NOT_REQUIRED);
     public static final StringSetting NATIVE_FLOATING_NAV_TRANSPARENCY =
             new StringSetting("native_floating_nav_transparency", "50", NOT_REQUIRED);
+    // Liquid glass on top of the blur (see LiquidGlassEffect): the rim of Instagram's own floating bar bends what is
+    // behind it like the edge of thick glass, with a faint colour fringe and a light rim. Needs Android 13 (below that
+    // the plain blur is drawn) and only does something while the blur is on. Off by default. Applies as soon as you go
+    // back to the app (no restart).
+    public static final BooleanSetting NATIVE_FLOATING_NAV_LIQUID = new BooleanSetting("native_floating_nav_liquid", false, NOT_REQUIRED);
+    // How strongly the rim bends the page, 0 to 100 % (0 = no bend, only the rim light). Chosen with the slider under
+    // the liquid glass switch.
+    public static final StringSetting NATIVE_FLOATING_NAV_REFRACTION =
+            new StringSetting("native_floating_nav_refraction", "60", NOT_REQUIRED);
     // Hides the system's gesture line (the thin handle at the bottom of the screen) while a floating bar is on, by
     // hiding the system navigation bar of the app's main screen. Off by default: a swipe up from the bottom edge then
     // needs two swipes to go Home. Applies as soon as you go back to the app (no restart). See GestureLineHider.

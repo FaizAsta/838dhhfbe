@@ -828,25 +828,6 @@ public class ScreenBuilder {
                     Settings.RESUME_REELS_AFTER_SCROLLING
             ));
         }
-        // Ambient glow in the bars of a Reel that does not fill the screen (see ReelsAmbient). Drawn by the extension
-        // alone, so it is always offered. The button copies what was found on the Reels screen, for a bug report.
-        if (SettingsStatus.reelsAmbient()) {
-            addPreference(helper.switchPreference(
-                    str("piko_reels_ambient"),
-                    str("piko_reels_ambient_desc"),
-                    Settings.REELS_AMBIENT
-            ));
-            addPreference(
-                    helper.availableWhen(
-                            helper.buttonPreference(
-                                    str("piko_copy_reels_ambient_info"),
-                                    "",
-                                    "piko_copy_reels_ambient_info"
-                            ),
-                            () -> Pref.reelsAmbient()
-                    )
-            );
-        }
         if (SettingsStatus.improveImageViewing) {
             addPreference(
                     helper.switchPreference(
@@ -1225,6 +1206,34 @@ public class ScreenBuilder {
                                 }
                         ),
                         () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur()
+                )
+        );
+
+        // Liquid glass on top of the blur: the rim bends what is behind the bar. Needs the blur, so it is dimmed
+        // unless Instagram's own floating bar and its blur are on. The slider is dimmed until the switch is on.
+        addPreference(
+                helper.availableWhen(
+                        helper.switchPreference(
+                                str("piko_native_floating_nav_liquid"),
+                                "",
+                                Settings.NATIVE_FLOATING_NAV_LIQUID
+                        ),
+                        () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur()
+                )
+        );
+        addPreference(
+                helper.availableWhen(
+                        helper.percentSliderPreference(
+                                "piko_native_floating_nav_refraction",
+                                str("piko_native_floating_nav_refraction"),
+                                "",
+                                new PercentSliderPreference.Access() {
+                                    @Override public int get() { return Pref.nativeFloatingNavRefraction(); }
+                                    @Override public void set(int percent) { Pref.setNativeFloatingNavRefraction(percent); }
+                                    @Override public void live(int percent) { }
+                                }
+                        ),
+                        () -> Pref.nativeFloatingNav() && Pref.nativeFloatingNavBlur() && Pref.nativeFloatingNavLiquid()
                 )
         );
 

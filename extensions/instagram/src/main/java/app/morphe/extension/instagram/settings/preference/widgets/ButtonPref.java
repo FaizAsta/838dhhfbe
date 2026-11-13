@@ -105,9 +105,6 @@ public class ButtonPref extends Preference {
                     } else if (key.equals("piko_copy_nav_bar_info")) {
                         copyNavBarInfo(context);
 
-                    } else if (key.equals("piko_copy_reels_ambient_info")) {
-                        copyReelsAmbientInfo(context);
-
                     } else if (key.equals("piko_download_id_mapping")) {
                         DownloadMapping.downloadMapping();
 
@@ -150,19 +147,6 @@ public class ButtonPref extends Preference {
         }
         clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Piko navigation bar info", report));
         Utils.showToastShort(str("piko_copy_nav_bar_info_done"));
-    }
-
-    /** Copies what the Reels ambient glow found on the Reels screen to the clipboard (see ReelsAmbient.debugReport). */
-    private static void copyReelsAmbientInfo(Context context) {
-        String report = app.morphe.extension.instagram.patches.ReelsAmbient.debugReport();
-        android.content.ClipboardManager clipboard =
-                (android.content.ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
-        if (report == null || clipboard == null) {
-            Utils.showToastShort(str("piko_copy_reels_ambient_info_none"));
-            return;
-        }
-        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Piko Reels ambient info", report));
-        Utils.showToastShort(str("piko_copy_reels_ambient_info_done"));
     }
 
     private static Runnable recreateActivityOnComplete(Context context) {
@@ -215,7 +199,6 @@ public class ButtonPref extends Preference {
                 || key.equals("piko_export_experiment_mappings")
                 || key.equals("piko_download_id_mapping")
                 || key.equals("piko_copy_nav_bar_info")
-                || key.equals("piko_copy_reels_ambient_info")
                 || key.equals("piko_rec_flags_refresh_file")
                 || key.equals("piko_view_saved_instants")
                 || key.equals("piko_pref_add_font")
