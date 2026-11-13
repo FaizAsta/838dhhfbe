@@ -529,6 +529,10 @@ public class Pref {
         return SharedPref.getBooleanPref(Settings.CUSTOM_TAB_PILL_DRAG);
     }
 
+    public static boolean reelsAmbient() {
+        return SharedPref.getBooleanPref(Settings.REELS_AMBIENT);
+    }
+
     /** Distance of the floating bar from each side of the screen, in dp (a larger value is a narrower pill). */
     public static int floatingNavSideDp() {
         return FloatingNavSize.clampSide(FloatingNavSize.parse(

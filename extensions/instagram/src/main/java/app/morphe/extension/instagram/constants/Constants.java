@@ -65,6 +65,7 @@ public class Constants {
 
     public static void load() {
         app.morphe.extension.instagram.patches.navigation.FloatingNavBar.start();
+        app.morphe.extension.instagram.patches.ReelsAmbient.start();
         StorageUtils.setStorageAccessLauncher(ctx -> ActivityHook.launchFragment(ctx, "piko_download_set_path"));
         ExtensionStrings.setDefaultPikoFolder(Constants.DEFAULT_PIKO_FOLDER);
         ExtensionStrings.setDownloadOngoing(str("piko_downloading_media"));

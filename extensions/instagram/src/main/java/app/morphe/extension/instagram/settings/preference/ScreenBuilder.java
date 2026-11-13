@@ -828,6 +828,25 @@ public class ScreenBuilder {
                     Settings.RESUME_REELS_AFTER_SCROLLING
             ));
         }
+        // Ambient glow in the bars of a Reel that does not fill the screen (see ReelsAmbient). Drawn by the extension
+        // alone, so it is always offered. The button copies what was found on the Reels screen, for a bug report.
+        if (SettingsStatus.reelsAmbient()) {
+            addPreference(helper.switchPreference(
+                    str("piko_reels_ambient"),
+                    str("piko_reels_ambient_desc"),
+                    Settings.REELS_AMBIENT
+            ));
+            addPreference(
+                    helper.availableWhen(
+                            helper.buttonPreference(
+                                    str("piko_copy_reels_ambient_info"),
+                                    "",
+                                    "piko_copy_reels_ambient_info"
+                            ),
+                            () -> Pref.reelsAmbient()
+                    )
+            );
+        }
         if (SettingsStatus.improveImageViewing) {
             addPreference(
                     helper.switchPreference(

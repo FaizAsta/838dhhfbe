@@ -310,6 +310,12 @@
     <string name="piko_copy_nav_bar_info_desc">Tap to copy how Instagram\'s own floating bar is built (sizes, layout, offsets) so you can paste it in a bug report. Open the home screen once first.</string>
     <string name="piko_copy_nav_bar_info_done">Navigation bar info copied</string>
     <string name="piko_copy_nav_bar_info_none">Nothing to copy yet. Turn on Instagram\'s own floating bar, restart, and open the home screen first.</string>
+    <string name="piko_reels_ambient">Ambient glow on Reels</string>
+    <string name="piko_reels_ambient_desc">When a Reel does not fill the screen (a wide or square video), fill the bars above and below it with a soft glow in the colours of the video, like ambient mode on YouTube. Applies as soon as you go back to the app.</string>
+    <string name="piko_copy_reels_ambient_info">Copy Reels ambient info</string>
+    <string name="piko_copy_reels_ambient_info_desc">Tap to copy what the ambient glow found on the Reels screen (the video views and the views around them) so you can paste it in a bug report. Open a Reel once first.</string>
+    <string name="piko_copy_reels_ambient_info_done">Reels ambient info copied</string>
+    <string name="piko_copy_reels_ambient_info_none">Nothing to copy yet. Turn on the ambient glow, go back to the app and open a Reel first.</string>
     <string name="piko_native_floating_nav_blur">Blur behind Instagram\'s own floating bar</string>
     <string name="piko_native_floating_nav_blur_desc">Makes Instagram\'s own floating bar see-through: the feed, Reels or whatever runs behind it shows through, blurred, and moves live as you scroll. Only for Instagram\'s own floating bar (it does nothing to the floating navigation bar above), so it needs that switch on. Needs Android 12 or newer. A video drawn on a SurfaceView shows as a hole in the blur. Applies as soon as you go back to the app.</string>
     <string name="piko_native_floating_nav_blur_level">Blur amount</string>
