@@ -1241,6 +1241,17 @@ public class ScreenBuilder {
                 )
         );
 
+        // Edge-to-edge Reels: the Reels page fills the whole screen. Not dimmed: the top (under the status bar) works
+        // with any bar; the part that takes the old frame away from around the bar needs Instagram's own floating bar
+        // (above) and is simply not active without it.
+        addToNavTab(NAV_TAB_DEFAULT,
+                helper.switchPreference(
+                        str("piko_reels_edge_to_edge"),
+                        "",
+                        Settings.REELS_EDGE_TO_EDGE
+                )
+        );
+
         // The system's gesture line under the floating bar. Only does something while one of the two floating bars
         // is on, so it is dimmed otherwise, like the size sliders.
         addToNavTab(NAV_TAB_DEFAULT,

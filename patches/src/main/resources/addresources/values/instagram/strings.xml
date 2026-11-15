@@ -306,6 +306,8 @@
     <string name="piko_tab_pill_reset_image_none">No picture to remove</string>
     <string name="piko_native_floating_nav">Instagram\'s own floating bar (experimental)</string>
     <string name="piko_native_floating_nav_desc">Turns on the floating bar that is built into Instagram itself, together with its edge-to-edge bottom, so Instagram runs the page behind the bar and leaves nothing around it. Use it instead of the floating navigation bar above (that one steps aside while this is on). The width and height sliders above change Instagram\'s bar instead. Restart the app after changing it. If the bar looks wrong, turn this off.</string>
+    <string name="piko_reels_edge_to_edge">Edge-to-edge Reels</string>
+    <string name="piko_reels_edge_to_edge_desc">Makes the Reels page fill the whole screen. At the top the Reel runs under the status bar, so the dark top bar is gone (this uses Instagram\'s own edge-to-edge flags for the top of Reels). With Instagram\'s own floating bar on, the Reel also runs down behind the bar, and the old dark frame around the bar (the strip the bar used to lie on) is taken away on every screen. Restart the app after changing it. If a screen looks wrong, turn this off. \"Copy navigation bar info\" tells what it did.</string>
     <string name="piko_copy_nav_bar_info">Copy navigation bar info</string>
     <string name="piko_copy_nav_bar_info_desc">Tap to copy how Instagram\'s own floating bar is built (sizes, layout, offsets) so you can paste it in a bug report. Open the home screen once first.</string>
     <string name="piko_copy_nav_bar_info_done">Navigation bar info copied</string>

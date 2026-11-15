@@ -463,6 +463,14 @@ public class Pref {
         return SharedPref.getBooleanPref(Settings.NATIVE_FLOATING_NAV);
     }
 
+    /**
+     * Reels fill the whole screen: under the status bar at the top (Instagram's own flags, see HookFlags) and, with
+     * Instagram's own floating bar on, down behind that bar with no old frame around it (see BarFrameRemover).
+     */
+    public static boolean reelsEdgeToEdge() {
+        return SharedPref.getBooleanPref(Settings.REELS_EDGE_TO_EDGE);
+    }
+
     public static boolean nativeFloatingNavBlur() {
         return SharedPref.getBooleanPref(Settings.NATIVE_FLOATING_NAV_BLUR);
     }

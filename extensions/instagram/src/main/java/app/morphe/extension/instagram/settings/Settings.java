@@ -156,6 +156,11 @@ public class Settings {
     // Instagram itself runs the page behind the bar. Off by default. The flags are read when the bar is created, so it
     // needs a restart. The bar of FLOATING_NAV_BAR steps aside while this is on. See HookFlags.
     public static final BooleanSetting NATIVE_FLOATING_NAV = new BooleanSetting("native_floating_nav", false, REQUIRED);
+    // Edge-to-edge Reels: the Reels page fills the whole screen. At the top it runs under the status bar (Instagram's
+    // own "modern UI edge to edge" flags for the top of the main activity and of Reels, see HookFlags), and, while
+    // Instagram's own floating bar is on, it runs down behind that bar with no dark frame left around it (see
+    // BarFrameRemover). On by default. The flags are read when the screen is created, so it needs a restart.
+    public static final BooleanSetting REELS_EDGE_TO_EDGE = new BooleanSetting("reels_edge_to_edge", true, REQUIRED);
     // Live blur behind Instagram's own floating bar (see NativeBarBlur): the page under the bar shows through it,
     // blurred. Needs Android 12 or newer. Only does something while NATIVE_FLOATING_NAV is on and the app has been
     // restarted since. Off by default. Applies as soon as you go back to the app (no restart).

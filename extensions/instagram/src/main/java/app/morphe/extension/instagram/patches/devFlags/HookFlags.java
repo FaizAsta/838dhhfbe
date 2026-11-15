@@ -308,6 +308,27 @@ public class HookFlags {
         }
     }
 
+    // Edge-to-edge Reels. The same "modern UI edge to edge" project has a flag per screen for the top: whether the
+    // screen runs under the status bar (docs/mappings/452.1.0.53.64.json: 126024::7 is_top_enabled_for_main_activity,
+    // 126024::9 is_top_enabled_for_reels; the other screens have their own, 3 direct, 4 explore, 5 feed, 6 homecoming,
+    // 8 profile, and they are left as Instagram has them). With the two on, Instagram itself draws the Reels page
+    // under the status bar, so no strip is left at the top, and keeps its header and buttons below the bar. Read when
+    // the screen is created, so a change of the setting needs a restart of the app. Not set when the setting is off.
+    private static void reelsEdgeToEdgeFlags() {
+        if (Pref.reelsEdgeToEdge()) {
+            BOOL_FLAGS.put("126024::7", true); //ig_android_modern_ui_edge_to_edge::is_top_enabled_for_main_activity
+            BOOL_FLAGS.put("126024::9", true); //ig_android_modern_ui_edge_to_edge::is_top_enabled_for_reels
+        } else {
+            BOOL_FLAGS.remove("126024::7");
+            BOOL_FLAGS.remove("126024::9");
+        }
+    }
+
+    /** True when the two top flags of the edge-to-edge Reels are on in the flags Instagram is answered with. */
+    public static boolean reelsEdgeToEdgeActive() {
+        return Boolean.TRUE.equals(BOOL_FLAGS.get("126024::7")) && Boolean.TRUE.equals(BOOL_FLAGS.get("126024::9"));
+    }
+
     /**
      * True when the two flags of Instagram's own floating bar are on in the flags Instagram is answered with right
      * now, which is what it read when it created its bar (so a flag that was set by hand, and wins over the setting,
@@ -332,6 +353,7 @@ public class HookFlags {
         // First, so a flag chosen by hand in the developer options or the recommended flags still wins.
         selectedTabPillFlags();
         nativeFloatingNavFlags();
+        reelsEdgeToEdgeFlags();
         addRecommendedFlags();
     }
 

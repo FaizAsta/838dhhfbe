@@ -51,6 +51,9 @@ import app.morphe.extension.shared.Logger;
  *       let run down to the bar's bottom edge (a negative bottom margin in a column, no "above the bar" rule in a
  *       relative layout), and that is given back as well.</li>
  * </ol>
+ * It is used for the pill of the floating navigation bar, and, while "Edge-to-edge Reels" is on, for Instagram's own
+ * floating bar (see {@code FloatingNavBar#nativeFrame}).
+ * <p>
  * Everything is remembered per view and put back by {@link #putBack}. Nothing here is searched for in Instagram's
  * code, so no fingerprint can fail on any Instagram version. When the page still stops short and nothing could be
  * done, the views around the bar are written to the log (lines that start with "Floating navigation bar:") so the
@@ -90,6 +93,15 @@ final class BarFrameRemover {
         /** True when nothing is changed (and so there is nothing to put back). */
         boolean isEmpty() {
             return painted.isEmpty() && freed.isEmpty() && rules.isEmpty();
+        }
+
+        /** What is changed right now, in a few words, for "Copy navigation bar info". */
+        String summary() {
+            if (isEmpty()) return "nothing taken away around the bar (the page already runs down, or none was found)";
+            StringBuilder text = new StringBuilder("taken away around the bar: ");
+            text.append(painted.size()).append(" painted strip(s), ").append(freed.size())
+                    .append(" margin(s) or padding(s), ").append(rules.size()).append(" layout rule(s)");
+            return text.toString();
         }
     }
 

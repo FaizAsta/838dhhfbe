@@ -196,6 +196,9 @@ public final class FloatingNavBar {
         /** Asks for the line to be hidden again whenever the window gets the focus back. */
         ViewTreeObserver.OnWindowFocusChangeListener focusListener;
 
+        /** "Edge-to-edge Reels" is switched on in the settings (read with the other settings). */
+        boolean edgeToEdge;
+
         /** Instagram's own floating bar is switched on in the settings (read with the other settings). */
         boolean nativeSetting;
         /**
@@ -358,6 +361,7 @@ public final class FloatingNavBar {
             }
             // Instagram's own floating bar (a separate setting) is a bar of its own: this one steps aside.
             boolean nativeSetting = Pref.nativeFloatingNav();
+            state.edgeToEdge = Pref.reelsEdgeToEdge();
             boolean wanted = Pref.floatingNavBar() && !nativeSetting;
             if (wanted != state.enabled) {
                 state.enabled = wanted;
@@ -397,8 +401,13 @@ public final class FloatingNavBar {
 
         if (!state.enabled || state.unsupported) {
             boolean relayout = nativeChanged;
-            if (state.pill != null || state.shadowHidden || state.appliedLeft >= 0 || state.marginTaken
-                    || state.clickTaken || !state.frame.isEmpty()) {
+            // Instagram's own floating bar with "Edge-to-edge Reels" on: the old frame around it is taken away (the
+            // pill does the same for itself below). While that is on, the margin and the frame it keeps are not
+            // given back here.
+            boolean frameKept = nativeFrameWanted(state);
+            if (frameKept && nativeFrame(decor, state, now)) relayout = true;
+            if (state.pill != null || state.shadowHidden || state.appliedLeft >= 0 || state.clickTaken
+                    || (!frameKept && (state.marginTaken || !state.frame.isEmpty()))) {
                 if (restore(state)) relayout = true;
             }
             return hold(state, relayout);
@@ -412,6 +421,61 @@ public final class FloatingNavBar {
             return nativeChanged;
         }
         return hold(state, apply(bar, state) || nativeChanged);
+    }
+
+    /**
+     * True when the old frame around Instagram's own floating bar is to be taken away: "Edge-to-edge Reels" and
+     * "Instagram's own floating bar" are on, and the bar really is Instagram's floating one (decided when the bar was
+     * created, like its size). The pill of the floating navigation bar does the same for itself in {@link #apply}.
+     */
+    private static boolean nativeFrameWanted(State state) {
+        return state.nativeSetting && state.nativeBar && state.edgeToEdge;
+    }
+
+    /**
+     * Takes what is left of the old bar frame away from around Instagram's own floating bar, so the page (Reels
+     * above all, which keeps a dark strip under the page on some builds) runs down behind the bar: the bottom margin
+     * of the screen container, the views that only paint the strip around the bar, space kept free for the bar on
+     * some other view, and a page that lies beside the bar (see {@link BarFrameRemover}, which is the same code the
+     * pill uses and does nothing when the page already runs down behind the bar). Everything is remembered and given
+     * back when the setting, Instagram's bar or the bar itself goes (see {@link #restore}). True when a layout
+     * changed.
+     */
+    private static boolean nativeFrame(View decor, State state, long now) {
+        View bar = findBar(decor, state, now);
+        if (bar == null || !bar.isAttachedToWindow()) return false;
+        // Hidden (a chat covers it): what was taken stays until the bar is shown again.
+        if (bar.getVisibility() != View.VISIBLE) return false;
+        View page = pageOf(bar, state);
+        boolean relayout = takeMargin(state);
+        BarFrameRemover.clearPaint(bar, page, state.frame);
+        // Not in a frame where the layout was just changed above: the sizes it reads are the old ones until it runs.
+        if (!relayout && BarFrameRemover.freeSpace(bar, page, state.frame)) relayout = true;
+        return relayout;
+    }
+
+    /**
+     * What "Edge-to-edge Reels" did, as text for "Copy navigation bar info": the setting, whether Instagram's top
+     * flags for Reels were on when the screen was created, and what was taken away around Instagram's own bar.
+     */
+    public static String edgeToEdgeReport() {
+        StringBuilder text = new StringBuilder("setting: ").append(Pref.reelsEdgeToEdge() ? "on" : "off");
+        text.append("\ntop flags (126024::7 and 126024::9) on in what Instagram is answered with: ")
+                .append(HookFlags.reelsEdgeToEdgeActive());
+        text.append("\nInstagram's own floating bar on in the settings: ").append(Pref.nativeFloatingNav())
+                .append(", flags on: ").append(HookFlags.nativeFloatingNavActive());
+        synchronized (WATCHED) {
+            int windows = 0;
+            for (State state : WATCHED.values()) {
+                windows++;
+                text.append("\nwindow ").append(windows).append(": old frame ")
+                        .append(nativeFrameWanted(state) ? "being taken away" : "not taken away")
+                        .append(", container margin taken: ").append(state.marginTaken)
+                        .append(", ").append(state.frame.summary());
+            }
+            if (windows == 0) text.append("\n(no main screen seen yet)");
+        }
+        return text.toString();
     }
 
     /**

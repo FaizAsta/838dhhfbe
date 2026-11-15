@@ -72,7 +72,8 @@ public final class NativeBarSize {
                 + "\n\n== After the size was applied ==\n" + (after == null ? "(not checked yet)" : after)
                 + "\n\n== Where the pill is drawn ==\n" + (pill == null ? "(not drawn yet)" : pill)
                 + "\n" + (padding == null ? "side padding: (not checked yet)" : padding)
-                + "\n\n== Press and hold the highlight ==\n" + TabPillDrag.status();
+                + "\n\n== Press and hold the highlight ==\n" + TabPillDrag.status()
+                + "\n\n== Edge-to-edge Reels ==\n" + FloatingNavBar.edgeToEdgeReport();
     }
 
     /** What Instagram had on the bar, what was set on it, and what was given up on. One per bar. */
