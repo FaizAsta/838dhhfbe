@@ -218,6 +218,8 @@ public final class FloatingNavBar {
         LiquidGlassLook nativeLook = LiquidGlassLook.DEFAULT;
         /** The blur that is on Instagram's own bar, and what could not be done (see NativeBarBlur). */
         NativeBarBlur.Memory nativeBlur = new NativeBarBlur.Memory();
+        /** The Reels videos that are zoomed down behind Instagram's own bar, and what was seen (see ReelsBottomFill). */
+        ReelsBottomFill.Memory reelsFill = new ReelsBottomFill.Memory();
     }
 
     /** Called when the app starts. */
@@ -396,6 +398,9 @@ public final class FloatingNavBar {
         // The blur behind Instagram's own bar. It only changes how the bar's background is drawn, never its layout, so
         // it does not hold the frame back.
         nativeBlur(decor, state, now);
+        // The picture of a Reel behind Instagram's own bar ("Edge-to-edge Reels"). Only draws the video bigger, never
+        // changes a layout, so it does not hold the frame back either.
+        reelsFill(decor, state, now);
         // The drag of the highlight (slide sideways or hold), for whichever bar is on screen.
         tabPillDrag(state);
 
@@ -471,7 +476,8 @@ public final class FloatingNavBar {
                 text.append("\nwindow ").append(windows).append(": old frame ")
                         .append(nativeFrameWanted(state) ? "being taken away" : "not taken away")
                         .append(", container margin taken: ").append(state.marginTaken)
-                        .append(", ").append(state.frame.summary());
+                        .append(", ").append(state.frame.summary())
+                        .append("\n").append(state.reelsFill.report());
             }
             if (windows == 0) text.append("\n(no main screen seen yet)");
         }
@@ -581,6 +587,26 @@ public final class FloatingNavBar {
     }
 
     /**
+     * "Edge-to-edge Reels" at the bottom, for Instagram's own floating bar: the video of a Reel that stops short above
+     * the bar (the dark strip that is left under the page) is drawn bigger until it reaches the bottom of the window,
+     * with the caption and the buttons left where they are (see {@link ReelsBottomFill}). Everything is given back
+     * when the setting or Instagram's bar goes, and while a chat or another screen hides the bar.
+     */
+    private static void reelsFill(View decor, State state, long now) {
+        ReelsBottomFill.Memory memory = state.reelsFill;
+        if (!nativeFrameWanted(state)) {
+            if (!memory.isEmpty()) ReelsBottomFill.putBack(memory);
+            return;
+        }
+        View bar = state.bar.get();
+        if (bar == null || !bar.isAttachedToWindow() || bar.getVisibility() != View.VISIBLE) {
+            if (!memory.isEmpty()) ReelsBottomFill.putBack(memory);
+            return;
+        }
+        ReelsBottomFill.apply(decor, bar, memory, now);
+    }
+
+    /**
      * Lets "slide the highlight sideways (or hold it), move it to a tab and let go" work (see {@link TabPillDrag}): hands it the
      * bar and the highlight that is on screen, or nothing when the setting is off or there is no highlight, which
      * switches the touch handling off again. It only reads what the frame already found.
@@ -632,6 +658,7 @@ public final class FloatingNavBar {
             state.nativeSize = new NativeBarSize.Memory();
             state.bottomGap = new BarBottomGap.Memory();
             state.nativeBlur = new NativeBarBlur.Memory();
+            state.reelsFill = new ReelsBottomFill.Memory();
             // The old bar's translation is gone with it. Whether the navigation bar is hidden belongs to the window.
             state.gesture.shifted = false;
         }
